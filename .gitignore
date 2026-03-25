@@ -25,4 +25,4 @@ out/
 
 # Uploads (local dev)
 backend/tests
-Agent.md
+/docs
