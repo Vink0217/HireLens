@@ -12,10 +12,10 @@ export default function Navbar() {
       {/* Actions */}
       <div className="flex items-center gap-4">
         <button className="text-sm font-medium text-brand-text-muted hover:text-brand-text transition-colors duration-200 cursor-pointer">
-          Login
+          Sign In (Staff)
         </button>
         <button className="text-sm font-medium bg-brand-surface border border-brand-border text-brand-text px-4 py-2 rounded-full hover:bg-brand-accent hover:text-black hover:border-brand-accent transition-all duration-300 transform active:scale-95 cursor-pointer">
-          Get Started
+          Launch Dashboard
         </button>
       </div>
     </nav>
