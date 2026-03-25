@@ -7,10 +7,10 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
 
 # Environment
 .env
-.env.local
 
 # IDE
 .vscode/
@@ -18,14 +18,12 @@ build/
 *.swp
 *.swo
 
-# Node / Frontend (for later)
+# Node / Frontend 
 node_modules/
 .next/
 out/
 
-# OS
-.DS_Store
-Thumbs.db
-
 # Uploads (local dev)
-uploads/
+backend/tests
+
+Agent.md
