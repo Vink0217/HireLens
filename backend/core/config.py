@@ -31,7 +31,13 @@ class Settings:
     # Optional
     GEMINI_EMBEDDING_MODEL: str = "models/text-embedding-004"
     MAX_FILE_SIZE_MB: int = 10
-    CORS_ORIGINS: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
+    CORS_ORIGINS: list[str] = field(default_factory=lambda: [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://*.vercel.app",
+        "https://*.loca.lt",
+        "https://*.ngrok-free.app"
+    ])
 
     # Computed flags
     USE_LOCAL_STORAGE: bool = False
