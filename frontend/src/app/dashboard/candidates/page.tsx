@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Search, Filter, AlertCircle, Eye, Users, Trash2, Loader2 } from "lucide-react";
+import { Search, Filter, Eye, Users, Trash2, Loader2, X, Layers3, FileSearch, ExternalLink } from "lucide-react";
 import useSWR from "swr";
-import { fetcher, deleteResume } from "@/lib/api";
+import { fetcher, deleteResume, runMultiRoleRanking, fetchRagEvidence, MultiRoleResult, RagEvidenceChunk } from "@/lib/api";
 
 interface BackendResume {
   id: string;
@@ -20,10 +20,19 @@ interface BackendResume {
   job_company?: string;
 }
 
+interface JobLite {
+  id: string;
+  title: string;
+  company?: string;
+}
+
 export default function GlobalCandidatesView() {
   const { data: swrCandidates, error, mutate } = useSWR("/resumes", fetcher);
+  const { data: swrJobs } = useSWR<JobLite[]>("/jobs", fetcher);
   const candidates = Array.isArray(swrCandidates) ? swrCandidates : [];
+  const allJobs = Array.isArray(swrJobs) ? swrJobs : [];
   const isLoading = !swrCandidates && !error;
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState("All Roles");
@@ -32,6 +41,29 @@ export default function GlobalCandidatesView() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteResumeId, setDeleteResumeId] = useState<string | null>(null);
   const [deleteResumeName, setDeleteResumeName] = useState("");
+  const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
+  const [multiRoleResults, setMultiRoleResults] = useState<MultiRoleResult[]>([]);
+  const [isRunningMultiRole, setIsRunningMultiRole] = useState(false);
+  const [multiRoleError, setMultiRoleError] = useState<string | null>(null);
+  const [ragEvidence, setRagEvidence] = useState<RagEvidenceChunk[]>([]);
+  const [isLoadingRagEvidence, setIsLoadingRagEvidence] = useState(false);
+  const [ragError, setRagError] = useState<string | null>(null);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isFilterOpen) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (filterMenuRef.current && !filterMenuRef.current.contains(target)) {
+        setIsFilterOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [isFilterOpen]);
 
   const confirmDelete = async () => {
     if (!deleteResumeId) return;
@@ -69,12 +101,20 @@ export default function GlobalCandidatesView() {
            best_summary: c.summary,
            file_type: c.file_type,
            screened_at: c.screened_at,
+           file_name: c.file_name,
+           file_url: c.file_url,
+           extracted_data: c.extracted_data,
         };
       }
       
       const score = c.score || 0;
       if (score > groups[name].best_score) {
          groups[name].best_score = score;
+        groups[name].id = c.id;
+        groups[name].file_name = c.file_name;
+        groups[name].file_type = c.file_type;
+        groups[name].file_url = c.file_url;
+        groups[name].extracted_data = c.extracted_data;
       }
       // Always favor a summary that actually exists
       if (c.summary && (!groups[name].best_summary || score >= groups[name].best_score)) {
@@ -112,6 +152,115 @@ export default function GlobalCandidatesView() {
 
   const uniqueRoles = Array.from(new Set(candidates.map((c: any) => c.job_title).filter(title => Boolean(title) && title !== 'null'))) as string[];
 
+  const getParsedData = (candidate: any) => {
+    if (!candidate?.extracted_data) return {};
+    try {
+      return typeof candidate.extracted_data === "string"
+        ? JSON.parse(candidate.extracted_data)
+        : candidate.extracted_data;
+    } catch {
+      return {};
+    }
+  };
+
+  const buildDownloadName = (candidate: any) => {
+    const baseName = (candidate.file_name || "resume").trim();
+    const ext = (candidate.file_type || "").toLowerCase();
+    if (!ext) return baseName;
+    return baseName.toLowerCase().endsWith(`.${ext}`) ? baseName : `${baseName}.${ext}`;
+  };
+
+  const triggerBlobDownload = (blob: Blob, filename: string) => {
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  const openResumeFile = async (candidate: any) => {
+    const downloadUrl = `${apiBaseUrl}/resumes/${candidate.id}/download`;
+    const filename = buildDownloadName(candidate);
+
+    try {
+      const response = await fetch(downloadUrl);
+      if (response.ok) {
+        const blob = await response.blob();
+        triggerBlobDownload(blob, filename);
+        return;
+      }
+    } catch {
+      // fallback below
+    }
+
+    if (candidate.file_url) {
+      window.open(candidate.file_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    alert("Resume file is unavailable right now.");
+  };
+
+  const toggleJobSelection = (jobIdValue: string) => {
+    setSelectedJobIds((prev) =>
+      prev.includes(jobIdValue)
+        ? prev.filter((id) => id !== jobIdValue)
+        : [...prev, jobIdValue]
+    );
+  };
+
+  const handleRunMultiRole = async () => {
+    if (!selectedCandidate || selectedJobIds.length === 0) {
+      setMultiRoleError("Select at least one role to compare.");
+      return;
+    }
+
+    setIsRunningMultiRole(true);
+    setMultiRoleError(null);
+    try {
+      const results = await runMultiRoleRanking(selectedCandidate.id, selectedJobIds);
+      setMultiRoleResults(results);
+    } catch (err: any) {
+      setMultiRoleError(err?.response?.data?.detail || "Failed to run multi-role ranking.");
+      setMultiRoleResults([]);
+    } finally {
+      setIsRunningMultiRole(false);
+    }
+  };
+
+  const handleLoadRagEvidence = async () => {
+    if (!selectedCandidate) return;
+    const baseJobId = selectedCandidate.roles?.[0]?.job_id;
+    if (!baseJobId) {
+      setRagError("This candidate has no linked role for evidence retrieval.");
+      return;
+    }
+
+    setIsLoadingRagEvidence(true);
+    setRagError(null);
+    try {
+      const data = await fetchRagEvidence(selectedCandidate.id, baseJobId, 4);
+      setRagEvidence(data.chunks || []);
+    } catch (err: any) {
+      setRagError(err?.response?.data?.detail || "Failed to load evidence snippets.");
+      setRagEvidence([]);
+    } finally {
+      setIsLoadingRagEvidence(false);
+    }
+  };
+
+  const openCandidateAnalysis = (candidate: any) => {
+    setSelectedCandidate(candidate);
+    setSelectedJobIds([]);
+    setMultiRoleResults([]);
+    setMultiRoleError(null);
+    setRagEvidence([]);
+    setRagError(null);
+  };
+
   return (
     <div className="flex flex-col gap-8 animate-fade-in pb-12">
       <header className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-brand-border/30 pb-6 gap-4">
@@ -135,7 +284,7 @@ export default function GlobalCandidatesView() {
               className="w-full pl-9 pr-4 py-2.5 bg-brand-surface/50 border border-brand-border rounded-lg text-sm text-brand-text focus:border-brand-accent focus:bg-brand-surface focus:outline-none transition-all shadow-inner" 
             />
          </div>
-         <div className="relative">
+         <div className="relative" ref={filterMenuRef}>
            <button 
              onClick={() => setIsFilterOpen(!isFilterOpen)}
              className={`px-4 py-2.5 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${(selectedRole !== "All Roles" || minScore > 0) ? 'bg-brand-accent/10 border-brand-accent text-brand-accent shadow-[0_0_10px_rgba(224,179,85,0.2)]' : 'bg-brand-surface border-brand-border text-brand-text hover:border-brand-accent/50'} cursor-pointer`}
@@ -268,9 +417,14 @@ export default function GlobalCandidatesView() {
                   </div>
 
                   <div className="col-span-1 flex justify-end gap-2">
-                    <Link href={`/dashboard/jobs/${g.roles[0]?.job_id || ''}`} className="w-8 h-8 rounded-full border border-brand-border/50 flex items-center justify-center text-brand-text-muted hover:text-brand-accent hover:border-brand-accent transition-colors" title="View Profile">
+                    <button
+                      type="button"
+                      onClick={() => openCandidateAnalysis(g)}
+                      className="w-8 h-8 rounded-full border border-brand-border/50 flex items-center justify-center text-brand-text-muted hover:text-brand-accent hover:border-brand-accent transition-colors"
+                      title="View Analysis"
+                    >
                       <Eye size={14} />
-                    </Link>
+                    </button>
                     <button 
                       onClick={() => { setDeleteResumeId(g.id); setDeleteResumeName(g.name); }}
                       className="w-8 h-8 rounded-full border border-brand-border/50 flex items-center justify-center text-brand-text-muted hover:text-brand-danger hover:border-brand-danger transition-colors disabled:opacity-50"
@@ -286,10 +440,183 @@ export default function GlobalCandidatesView() {
         )}
       </div>
 
+      {selectedCandidate && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4 md:p-6 overflow-y-auto"
+          onClick={() => setSelectedCandidate(null)}
+        >
+          <div
+            className="max-w-4xl mx-auto border border-brand-border rounded-2xl bg-brand-bg-raised shadow-[0_20px_80px_rgba(0,0,0,0.5)] animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 md:p-6 border-b border-brand-border/40 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-brand-text-muted mb-2">Global Candidate Analysis</p>
+                <h2 className="text-2xl font-display text-brand-text">{selectedCandidate.name}</h2>
+                <p className="text-sm text-brand-text-muted mt-1">
+                  Best Score: <span className="text-brand-accent font-semibold">{selectedCandidate.best_score || 0}/10</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedCandidate(null)}
+                className="p-2 rounded-lg border border-brand-border text-brand-text-muted hover:text-brand-text hover:border-brand-accent transition-colors"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="rounded-xl border border-brand-border/50 bg-brand-surface/25 p-4">
+                  <p className="text-xs uppercase tracking-wider text-brand-text-muted mb-3">Profile Snapshot</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-brand-text-muted">Candidate</span>
+                      <span className="text-brand-text">{selectedCandidate.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-brand-text-muted">Top Summary</span>
+                      <span className="text-brand-text text-right max-w-[65%] truncate" title={selectedCandidate.best_summary || "N/A"}>
+                        {selectedCandidate.best_summary || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-brand-text-muted">Roles Applied</span>
+                      <span className="text-brand-text">{selectedCandidate.roles?.length || 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-brand-border/50 bg-brand-surface/30 p-4">
+                  <p className="text-xs uppercase tracking-wider text-brand-text-muted mb-3">Resume Access</p>
+                  <button
+                    type="button"
+                    onClick={() => openResumeFile(selectedCandidate)}
+                    className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-brand-accent/90 text-black text-sm font-semibold hover:bg-brand-accent transition-colors"
+                  >
+                    <span>Open Original Resume</span>
+                    <ExternalLink size={15} />
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-brand-border/50 bg-brand-surface/25 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <FileSearch size={16} className="text-brand-accent" />
+                      <p className="text-sm font-semibold text-brand-text">RAG Evidence Snippets</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleLoadRagEvidence}
+                      disabled={isLoadingRagEvidence}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-surface border border-brand-border text-brand-text hover:border-brand-accent hover:text-brand-accent disabled:opacity-50 transition-colors"
+                    >
+                      {isLoadingRagEvidence ? "Loading..." : "Load Evidence"}
+                    </button>
+                  </div>
+                  {ragError && <p className="text-xs text-brand-danger mb-2">{ragError}</p>}
+                  {ragEvidence.length === 0 ? (
+                    <p className="text-xs text-brand-text-muted">Load to see resume chunks most relevant to this candidate's top role.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {ragEvidence.map((chunk, idx) => (
+                        <div key={`${chunk.chunk_type}-${idx}`} className="rounded-lg border border-brand-border/40 bg-brand-bg/40 p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[11px] uppercase tracking-wider text-brand-accent">{chunk.chunk_type}</p>
+                            <p className="text-[11px] text-brand-text-muted">match {(chunk.similarity * 100).toFixed(1)}%</p>
+                          </div>
+                          <p className="text-xs text-brand-text-muted line-clamp-4">{chunk.chunk_text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-xl border border-brand-border/50 bg-brand-surface/25 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Layers3 size={16} className="text-brand-accent" />
+                      <p className="text-sm font-semibold text-brand-text">Multi-Role Ranking</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRunMultiRole}
+                      disabled={isRunningMultiRole || selectedJobIds.length === 0}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-accent text-black hover:bg-brand-accent-dim disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isRunningMultiRole ? "Running..." : "Compare"}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 mb-3 max-h-52 overflow-auto pr-1">
+                    {allJobs.length === 0 ? (
+                      <p className="text-xs text-brand-text-muted">No jobs available for comparison.</p>
+                    ) : (
+                      allJobs.map((job) => (
+                        <label
+                          key={job.id}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-border/50 bg-brand-surface/40 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedJobIds.includes(job.id)}
+                            onChange={() => toggleJobSelection(job.id)}
+                            className="accent-[#E0B355]"
+                          />
+                          <span className="text-xs text-brand-text truncate">{job.title}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+
+                  {multiRoleError && <p className="text-xs text-brand-danger mb-2">{multiRoleError}</p>}
+
+                  {multiRoleResults.length > 0 ? (
+                    <div className="space-y-2">
+                      {multiRoleResults.map((result) => (
+                        <div key={result.job_id} className="rounded-lg border border-brand-border/40 bg-brand-bg/40 p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-xs font-semibold text-brand-text truncate">{result.job_title}</p>
+                            <span className="text-xs font-bold text-brand-accent">{result.score}/10</span>
+                          </div>
+                          <p className="text-xs text-brand-text-muted line-clamp-2">{result.summary}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-brand-text-muted">Select one or more roles and click Compare.</p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-brand-border/50 bg-gradient-to-r from-brand-success/10 via-brand-surface/30 to-brand-accent/10 p-4">
+                  <p className="text-sm font-semibold text-brand-text mb-2">Applied Roles</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(selectedCandidate.roles || []).map((role: any, idx: number) => (
+                      <span key={`${role.title}-${idx}`} className="px-2.5 py-1 rounded-full text-xs border border-brand-border/50 bg-brand-surface/50 text-brand-text-muted">
+                        {role.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {deleteResumeId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-brand-bg-raised border border-brand-border w-full max-w-md rounded-2xl shadow-2xl p-8 flex flex-col gap-5 text-center items-center">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+          onClick={() => setDeleteResumeId(null)}
+        >
+          <div
+            className="bg-brand-bg-raised border border-brand-border w-full max-w-md rounded-2xl shadow-2xl p-8 flex flex-col gap-5 text-center items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="w-16 h-16 rounded-full bg-brand-danger/10 text-brand-danger flex items-center justify-center mb-2">
               <Trash2 size={32} />
             </div>
