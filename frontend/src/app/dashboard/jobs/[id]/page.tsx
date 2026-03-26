@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, UploadCloud, CheckCircle, AlertCircle, Eye, Search, Filter } from "lucide-react";
-import { fetchResumesForJob, uploadResume, fetchJob } from "@/lib/api";
+import useSWR from "swr";
+import { uploadResume, fetcher } from "@/lib/api";
 
 interface BackendResume {
   id: string;
@@ -15,51 +16,40 @@ interface BackendResume {
   score: number | null;
   summary: string | null;
   created_at: string;
+  status?: string;
 }
 
 export default function JobDetailView() {
   const params = useParams();
   const jobId = params?.id as string;
-  const [candidates, setCandidates] = useState<BackendResume[]>([]);
-  const [jobTitle, setJobTitle] = useState<string>("Loading...");
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const loadCandidates = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      // Fetch candidates array and the job wrapper simultaneously
-      const [candidatesData, jobData] = await Promise.all([
-        fetchResumesForJob(jobId),
-        fetchJob(jobId).catch(() => null)
-      ]);
-      
-      setCandidates(Array.isArray(candidatesData) ? candidatesData : candidatesData?.resumes || []);
-      if (jobData && jobData.title) setJobTitle(jobData.title);
-      else setJobTitle(`Job ${jobId.split("-")[0]}`);
-      
-    } catch (error) {
-      console.error("Failed to load candidates", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [jobId]);
+  const { data: candidatesData, error: candidatesError, mutate } = useSWR(`/resumes?job_id=${jobId}`, fetcher);
+  const { data: jobData } = useSWR(`/jobs/${jobId}`, fetcher);
+
+  const candidates = (Array.isArray(candidatesData) ? candidatesData : candidatesData?.resumes || []) as BackendResume[];
+  const jobTitle = jobData?.title || `Requirement: ${jobId.split("-")[0]}...`;
+  const isLoading = !candidatesData && !candidatesError && !jobData;
 
   useEffect(() => {
-    loadCandidates();
+    // Only poll if we have candidates currently in "processing"
+    const hasProcessing = candidates.some((c) => c.status?.toLowerCase() === "processing");
+    if (!hasProcessing) return;
+
     const interval = setInterval(() => {
-       loadCandidates();
+      mutate();
     }, 10000);
+
     return () => clearInterval(interval);
-  }, [loadCandidates]);
+  }, [candidates, mutate]);
 
   const handleFileUpload = async (file: File) => {
     try {
       setIsUploading(true);
       await uploadResume(jobId, file);
-      await loadCandidates();
+      mutate();
     } catch (error: any) {
       if (error.response?.status === 409) {
         alert("Duplicate Detcted: This exact resume has already been uploaded and scored for this role!");
