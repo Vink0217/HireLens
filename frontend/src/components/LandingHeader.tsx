@@ -29,7 +29,7 @@ export default function LandingHeader() {
       {/* Eyebrow */}
       <div className="animate-fade-up flex items-center gap-2 px-3 py-1 rounded-full border border-brand-accent/20 bg-brand-accent/5 text-brand-accent text-sm font-medium tracking-wide">
         <span className="w-1.5 h-1.5 rounded-full bg-brand-accent animate-pulse"></span>
-        Gemini 2.5 Flash Powered
+        AI Powered
       </div>
 
       {/* Headline */}
