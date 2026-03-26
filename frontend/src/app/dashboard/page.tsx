@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Plus, Users, Clock, ArrowRight, Trash2 } from "lucide-react";
-import { fetchJobs, createJob, deleteJob } from "@/lib/api";
+import useSWR from "swr";
+import { fetcher, createJob, deleteJob } from "@/lib/api";
 
 // Temporarily define interface
 interface Job {
@@ -21,8 +22,9 @@ export default function DashboardHome() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
   const [deleteJobTitle, setDeleteJobTitle] = useState("");
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: swrJobs, error, mutate } = useSWR("/jobs", fetcher);
+  const jobs = swrJobs || [];
+  const isLoading = !swrJobs && !error;
 
   // Form State
   const [title, setTitle] = useState("");
@@ -30,22 +32,6 @@ export default function DashboardHome() {
   const [desc, setDesc] = useState("");
   const [configId, setConfigId] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    loadJobs();
-  }, []);
-
-  const loadJobs = async () => {
-    try {
-      setIsLoading(true);
-      const data = await fetchJobs();
-      setJobs(data || []);
-    } catch (error) {
-      console.error("Failed to load jobs", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleCreateJob = async () => {
     if (!title) return;
@@ -56,7 +42,7 @@ export default function DashboardHome() {
       setTitle("");
       setCompany("");
       setDesc("");
-      loadJobs(); // refresh list
+      mutate(); // refresh SWR
     } catch (error) {
       console.error("Failed to create job", error);
     } finally {
@@ -74,7 +60,7 @@ export default function DashboardHome() {
     try {
       setIsSubmitting(true);
       await deleteJob(deleteJobId);
-      loadJobs();
+      mutate(); // refresh SWR
     } catch (error) {
       console.error("Failed to delete job", error);
       alert("Error deleting job. Check console.");
@@ -115,7 +101,7 @@ export default function DashboardHome() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {jobs.map((job) => (
+          {jobs.map((job: Job) => (
             <div key={job.id} className="group relative bg-brand-surface/30 border border-brand-border/50 hover:border-brand-accent/50 rounded-xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden flex flex-col h-full">
               
               <div className="flex items-start justify-between mb-4">
