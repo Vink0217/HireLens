@@ -1,7 +1,7 @@
 """
 Gemini API client wrapper for HireLens.
 
-Provides a single async function to call Gemini 2.5 Flash
+Provides a single async function to call Gemini
 with enforced JSON output mode.
 """
 
@@ -25,7 +25,7 @@ else:
 
 async def call_gemini(prompt: str, max_tokens: int = 1500) -> dict:
     """
-    Call Gemini 2.5 Flash and return parsed JSON.
+    Call Gemini and return parsed JSON.
 
     Args:
         prompt: Full prompt string (must request JSON output).
@@ -43,7 +43,7 @@ async def call_gemini(prompt: str, max_tokens: int = 1500) -> dict:
 
     try:
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.1-flash-lite-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=8192,
