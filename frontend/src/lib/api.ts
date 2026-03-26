@@ -84,3 +84,36 @@ export const deleteResume = async (resumeId: string) => {
   const { data } = await api.delete(`/resumes/${resumeId}`);
   return data;
 };
+
+export interface MultiRoleResult {
+  job_id: string;
+  job_title: string;
+  score: number;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  confidence?: string;
+  confidence_reason?: string;
+}
+
+export interface RagEvidenceChunk {
+  chunk_type: string;
+  chunk_text: string;
+  similarity: number;
+}
+
+export const runMultiRoleRanking = async (resumeId: string, jobIds: string[]) => {
+  const { data } = await api.post<MultiRoleResult[]>("/resumes/multi-role", {
+    resume_id: resumeId,
+    job_ids: jobIds,
+  });
+  return data;
+};
+
+export const fetchRagEvidence = async (resumeId: string, jobId: string, topK = 5) => {
+  const { data } = await api.get<{ resume_id: string; job_id: string; chunks: RagEvidenceChunk[] }>(
+    `/resumes/${resumeId}/rag-evidence`,
+    { params: { job_id: jobId, top_k: topK } }
+  );
+  return data;
+};
