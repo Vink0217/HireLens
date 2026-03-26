@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Search, Filter, AlertCircle, Eye, Users } from "lucide-react";
-import { fetchAllResumes } from "@/lib/api";
+import useSWR from "swr";
+import { fetcher } from "@/lib/api";
 
 interface BackendResume {
   id: string;
@@ -20,26 +21,14 @@ interface BackendResume {
 }
 
 export default function GlobalCandidatesView() {
-  const [candidates, setCandidates] = useState<BackendResume[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: swrCandidates, error } = useSWR("/resumes", fetcher);
+  const candidates = Array.isArray(swrCandidates) ? swrCandidates : [];
+  const isLoading = !swrCandidates && !error;
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [showOnlyHighMatch, setShowOnlyHighMatch] = useState(false);
-
-  useEffect(() => {
-    loadCandidates();
-  }, []);
-
-  const loadCandidates = async () => {
-    try {
-      setIsLoading(true);
-      const data = await fetchAllResumes();
-      setCandidates(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Failed to load global candidates", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [selectedRole, setSelectedRole] = useState("All Roles");
+  const [minScore, setMinScore] = useState(0);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const getCandidateName = (c: BackendResume) => {
     if (!c.extracted_data) return c.file_name;
@@ -58,9 +47,15 @@ export default function GlobalCandidatesView() {
     (c.job_title && c.job_title.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  if (showOnlyHighMatch) {
-    filteredCandidates = filteredCandidates.filter(c => (c.score || 0) >= 8);
+  if (selectedRole !== "All Roles") {
+    filteredCandidates = filteredCandidates.filter(c => c.job_title === selectedRole);
   }
+
+  if (minScore > 0) {
+    filteredCandidates = filteredCandidates.filter(c => (c.score || 0) >= minScore);
+  }
+
+  const uniqueRoles = Array.from(new Set(candidates.map(c => c.job_title).filter(Boolean))) as string[];
 
   return (
     <div className="flex flex-col gap-8 animate-fade-in pb-12">
@@ -74,8 +69,8 @@ export default function GlobalCandidatesView() {
         </div>
       </header>
 
-      <div className="flex items-center justify-between gap-4">
-         <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+         <div className="relative flex-1 w-full max-w-sm">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" />
             <input 
               type="text" 
@@ -85,13 +80,60 @@ export default function GlobalCandidatesView() {
               className="w-full pl-9 pr-4 py-2.5 bg-brand-surface/50 border border-brand-border rounded-lg text-sm text-brand-text focus:border-brand-accent focus:bg-brand-surface focus:outline-none transition-all shadow-inner" 
             />
          </div>
-         <button 
-           onClick={() => setShowOnlyHighMatch(!showOnlyHighMatch)} 
-           className={`px-4 py-2.5 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${showOnlyHighMatch ? 'bg-brand-success/20 border-brand-success text-brand-success' : 'border-brand-border text-brand-text-muted hover:text-brand-text hover:bg-brand-surface'}`}
-         >
-           <Filter size={16} />
-           {showOnlyHighMatch ? 'High Matches Only' : 'Filter High Matches'}
-         </button>
+         <div className="relative">
+           <button 
+             onClick={() => setIsFilterOpen(!isFilterOpen)}
+             className={`px-4 py-2.5 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${(selectedRole !== "All Roles" || minScore > 0) ? 'bg-brand-accent/10 border-brand-accent text-brand-accent shadow-[0_0_10px_rgba(224,179,85,0.2)]' : 'bg-brand-surface border-brand-border text-brand-text hover:border-brand-accent/50'} cursor-pointer`}
+           >
+             <Filter size={16} />
+             Filters {(selectedRole !== "All Roles" || minScore > 0) && "(Active)"}
+           </button>
+
+           {isFilterOpen && (
+             <div className="absolute right-0 top-full mt-2 w-72 bg-brand-bg-raised border border-brand-border/50 rounded-xl shadow-2xl p-5 z-50 animate-fade-in flex flex-col gap-5">
+               
+               <div className="flex items-center justify-between border-b border-brand-border/30 pb-3">
+                 <h3 className="text-sm font-bold text-brand-text">Filter Candidates</h3>
+                 <button onClick={() => { setSelectedRole("All Roles"); setMinScore(0); }} className="text-xs font-medium text-brand-text-muted hover:text-brand-accent transition-colors">Clear All</button>
+               </div>
+               
+               <div>
+                 <label className="block text-[10px] font-bold text-brand-text-muted uppercase tracking-wider mb-2">Applied Role</label>
+                 <select 
+                   value={selectedRole}
+                   onChange={(e) => setSelectedRole(e.target.value)}
+                   className="w-full px-3 py-2 bg-brand-surface border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:border-brand-accent transition-all cursor-pointer appearance-none"
+                   style={{ backgroundImage: "none" }}
+                 >
+                   <option value="All Roles">All Roles</option>
+                   {uniqueRoles.map(role => (
+                     <option key={role} value={role}>{role}</option>
+                   ))}
+                 </select>
+               </div>
+
+               <div>
+                 <label className="block text-[10px] font-bold text-brand-text-muted uppercase tracking-wider mb-2">Minimum Match Score</label>
+                 <select 
+                   value={minScore.toString()}
+                   onChange={(e) => setMinScore(Number(e.target.value))}
+                   className="w-full px-3 py-2 bg-brand-surface border border-brand-border rounded-lg text-sm text-brand-text focus:outline-none focus:border-brand-accent transition-all cursor-pointer appearance-none"
+                   style={{ backgroundImage: "none" }}
+                 >
+                   <option value="0">All Scores</option>
+                   <option value="5">Score &ge; 5 (Average)</option>
+                   <option value="7">Score &ge; 7 (Good)</option>
+                   <option value="8">Score &ge; 8 (High Match)</option>
+                   <option value="9">Score &ge; 9 (Exceptional)</option>
+                 </select>
+               </div>
+               
+               <button onClick={() => setIsFilterOpen(false)} className="w-full py-2 bg-brand-accent/10 border border-brand-accent text-brand-accent rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-brand-accent hover:text-black transition-all">
+                 Apply Filters
+               </button>
+             </div>
+           )}
+         </div>
       </div>
 
       <div className="bg-brand-bg-raised border border-brand-border/50 rounded-xl overflow-hidden min-h-[500px] shadow-lg">
