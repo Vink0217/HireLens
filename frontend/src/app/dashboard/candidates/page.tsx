@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Search, Filter, AlertCircle, Eye, Users } from "lucide-react";
 import useSWR from "swr";
@@ -30,32 +30,69 @@ export default function GlobalCandidatesView() {
   const [minScore, setMinScore] = useState(0);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const getCandidateName = (c: BackendResume) => {
-    if (!c.extracted_data) return c.file_name;
-    let data;
-    try {
-      data = typeof c.extracted_data === "string" ? JSON.parse(c.extracted_data) : c.extracted_data;
-    } catch (e) {
-      return c.file_name;
-    }
-    const name = data.name || data.full_name || data.candidate_name;
-    return name ? name : c.file_name;
-  };
+  const groupedCandidates = useMemo(() => {
+    const groups: Record<string, any> = {};
+    
+    candidates.forEach((c: any) => {
+      let name = c.file_name;
+      if (c.extracted_data) {
+        try {
+          const data = typeof c.extracted_data === "string" ? JSON.parse(c.extracted_data) : c.extracted_data;
+          name = data.name || data.full_name || data.candidate_name || name;
+        } catch (e) {}
+      }
+      
+      if (!groups[name]) {
+        groups[name] = {
+           id: c.id,
+           name: name,
+           roles: [],
+           best_score: 0,
+           best_summary: c.summary,
+           file_type: c.file_type,
+           screened_at: c.screened_at,
+        };
+      }
+      
+      const score = c.score || 0;
+      if (score > groups[name].best_score) {
+         groups[name].best_score = score;
+      }
+      // Always favor a summary that actually exists
+      if (c.summary && (!groups[name].best_summary || score >= groups[name].best_score)) {
+         groups[name].best_summary = c.summary;
+      }
+      
+      if (c.job_title && c.job_title !== 'null' && c.job_id !== 'null') {
+        if (!groups[name].roles.find((r: any) => r.title === c.job_title)) {
+          groups[name].roles.push({
+            title: c.job_title,
+            company: c.job_company,
+            score: c.score,
+            id: c.id,
+            job_id: c.job_id
+          });
+        }
+      }
+    });
+    
+    return Object.values(groups).sort((a, b) => b.best_score - a.best_score);
+  }, [candidates]);
 
-  let filteredCandidates = candidates.filter(c => 
-    getCandidateName(c).toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (c.job_title && c.job_title.toLowerCase().includes(searchQuery.toLowerCase()))
+  let filteredGroups = groupedCandidates.filter(g => 
+    g.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    g.roles.some((r: any) => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   if (selectedRole !== "All Roles") {
-    filteredCandidates = filteredCandidates.filter(c => c.job_title === selectedRole);
+    filteredGroups = filteredGroups.filter(g => g.roles.some((r: any) => r.title === selectedRole));
   }
 
   if (minScore > 0) {
-    filteredCandidates = filteredCandidates.filter(c => (c.score || 0) >= minScore);
+    filteredGroups = filteredGroups.filter(g => g.best_score >= minScore);
   }
 
-  const uniqueRoles = Array.from(new Set(candidates.map(c => c.job_title).filter(Boolean))) as string[];
+  const uniqueRoles = Array.from(new Set(candidates.map((c: any) => c.job_title).filter(title => Boolean(title) && title !== 'null'))) as string[];
 
   return (
     <div className="flex flex-col gap-8 animate-fade-in pb-12">
@@ -149,7 +186,7 @@ export default function GlobalCandidatesView() {
            <div className="flex justify-center items-center h-64">
              <div className="w-8 h-8 rounded-full border-2 border-brand-accent border-t-transparent animate-spin"></div>
            </div>
-        ) : filteredCandidates.length === 0 ? (
+        ) : filteredGroups.length === 0 ? (
            <div className="flex flex-col justify-center items-center h-64 text-center">
              <Search size={32} className="text-brand-text-muted/30 mb-4" />
              <p className="text-brand-text-muted mb-2 font-medium">No candidates found.</p>
@@ -157,40 +194,50 @@ export default function GlobalCandidatesView() {
            </div>
         ) : (
           <div className="flex flex-col divide-y divide-brand-border/30">
-            {filteredCandidates.map((c) => {
-              const name = getCandidateName(c);
-              const isHighMatch = (c.score || 0) >= 8;
+            {filteredGroups.map((g) => {
+              const isHighMatch = g.best_score >= 8;
               
               return (
-                <div key={c.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-brand-surface/20 transition-colors group">
+                <div key={g.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-brand-surface/20 transition-colors group">
                   <div className="col-span-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded bg-brand-surface border border-brand-border/50 flex items-center justify-center text-xs font-bold text-brand-accent uppercase shrink-0">
-                        {name.substring(0, 2)}
+                        {g.name.substring(0, 2)}
                       </div>
                       <div className="truncate">
-                        <p className="text-sm font-medium text-brand-text truncate" title={name}>{name}</p>
-                        <p className="text-[10px] text-brand-text-muted mt-0.5 uppercase tracking-wider">{c.file_type.replace('.', '')} • {new Date(c.screened_at || "").toLocaleDateString()}</p>
+                        <p className="text-sm font-medium text-brand-text truncate" title={g.name}>{g.name}</p>
+                        <p className="text-[10px] text-brand-text-muted mt-0.5 uppercase tracking-wider">{g.file_type.replace('.', '')} • {new Date(g.screened_at || "").toLocaleDateString()}</p>
                       </div>
                     </div>
                   </div>
                   
                   <div className="col-span-3">
-                    <Link href={`/dashboard/jobs/${c.job_id}`} className="inline-flex flex-col group-hover:bg-brand-surface/50 px-3 py-1.5 rounded-lg transition-colors -ml-3">
-                      <p className="text-sm font-medium text-brand-accent truncate hover:underline" title={c.job_title}>{c.job_title}</p>
-                      <p className="text-[10px] text-brand-text-muted mt-0.5">{c.job_company || "HireLens Internal"}</p>
-                    </Link>
+                    <div className="flex flex-wrap gap-1.5 -ml-2">
+                      {g.roles.length > 0 ? g.roles.map((role: any, idx: number) => (
+                        <Link key={idx} href={`/dashboard/jobs/${role.job_id}`} className="group-hover:bg-brand-surface/80 bg-brand-surface/50 border border-brand-border/50 px-2 py-1.5 rounded-lg transition-colors flex items-center gap-2">
+                          <div>
+                            <p className="text-[11px] font-bold text-brand-accent hover:underline leading-tight truncate max-w-[120px]" title={role.title}>{role.title}</p>
+                            <p className="text-[9px] text-brand-text-muted leading-tight">{role.company || "HireLens Internal"}</p>
+                          </div>
+                          {role.score != null && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${role.score >= 8 ? 'bg-brand-success/20 text-brand-success' : 'bg-brand-surface border border-brand-border text-brand-text-muted'}`}>{role.score}</span>
+                          )}
+                        </Link>
+                      )) : (
+                        <span className="text-xs text-brand-text-muted italic px-2">General Application</span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="col-span-2">
                     <div className="flex items-center gap-2.5">
                       <div className={`text-xl font-light w-8 text-center ${isHighMatch ? 'text-brand-success font-medium' : 'text-brand-text'}`}>
-                        {c.score || 0}
+                        {g.best_score || 0}
                       </div>
                       <div className="flex-1 h-1.5 bg-brand-surface rounded-full overflow-hidden max-w-[80px]">
                         <div 
                           className={`h-full rounded-full ${isHighMatch ? 'bg-brand-success shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'bg-brand-accent opacity-70'}`}
-                          style={{ width: `${(c.score || 0) * 10}%` }}
+                          style={{ width: `${(g.best_score || 0) * 10}%` }}
                         />
                       </div>
                     </div>
@@ -198,7 +245,7 @@ export default function GlobalCandidatesView() {
 
                   <div className="col-span-3">
                     <p className="text-xs text-brand-text-muted line-clamp-2 leading-relaxed">
-                      {c.summary || "No summary generated."}
+                      {g.best_summary || "No summary generated."}
                     </p>
                   </div>
 

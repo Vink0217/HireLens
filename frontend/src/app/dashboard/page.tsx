@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Users, Clock, ArrowRight, Trash2 } from "lucide-react";
+import { Plus, Users, Clock, ArrowRight, Trash2, Briefcase, Settings, ChevronDown } from "lucide-react";
 import useSWR from "swr";
 import { fetcher, createJob, deleteJob } from "@/lib/api";
 
@@ -23,6 +23,7 @@ export default function DashboardHome() {
   const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
   const [deleteJobTitle, setDeleteJobTitle] = useState("");
   const { data: swrJobs, error, mutate } = useSWR("/jobs", fetcher);
+  const { data: configs } = useSWR("/configs", fetcher);
   const jobs = swrJobs || [];
   const isLoading = !swrJobs && !error;
 
@@ -185,25 +186,51 @@ export default function DashboardHome() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-brand-text mb-1.5">Requirements / JD Context</label>
+                <label className="block text-sm font-medium text-brand-text mb-1.5 flex justify-between">
+                  <span>Requirements / JD Context</span>
+                </label>
                 <textarea 
-                  rows={4} 
+                  rows={8} 
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
-                  placeholder="Paste the core requirements here for Gemini to score against..." 
-                  className="w-full bg-brand-surface border border-brand-border rounded-lg px-4 py-2 text-brand-text placeholder:text-brand-text-muted/50 focus:outline-none focus:border-brand-accent transition-colors resize-none"
+                  placeholder="Paste the core requirements here for Gemini to score against...&#10;&#10;E.g.,&#10;- 5+ years building scaleable backend systems&#10;- Expert in Python, FastAPI, and Postgres&#10;- Experience strictly in building AI/ML automation tools" 
+                  className="w-full min-h-[180px] bg-brand-surface/80 border border-brand-border rounded-lg px-4 py-3 text-brand-text placeholder:text-brand-text-muted/50 focus:outline-none focus:border-brand-accent transition-colors resize-y shadow-inner text-sm"
                 ></textarea>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-brand-text mb-1.5">Extraction Config ID</label>
-                <input 
-                  type="number" 
-                  value={configId}
-                  onChange={(e) => setConfigId(e.target.value)}
-                  className="w-full bg-brand-surface border border-brand-border rounded-lg px-4 py-2 text-brand-text focus:outline-none focus:border-brand-accent transition-colors" 
-                />
-              </div>
+              <details className="mt-2 group border border-brand-border/50 rounded-xl bg-brand-surface/30 hover:border-brand-accent/50 transition-all duration-300">
+                <summary className="px-4 py-3 text-sm font-medium text-brand-text-muted group-hover:text-brand-text cursor-pointer select-none list-none flex justify-between items-center group-open:border-b group-open:border-brand-border/30 group-open:text-brand-accent">
+                  <span className="flex items-center gap-2">
+                    <Settings size={15} /> Advanced Configuration
+                  </span>
+                  <ChevronDown size={15} className="group-open:rotate-180 transition-transform duration-300" />
+                </summary>
+                
+                <div className="p-5 flex flex-col gap-4 bg-brand-bg/50 rounded-b-xl animate-fade-in">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-brand-text-muted mb-2">Extraction Schema Priority</label>
+                    <div className="relative">
+                      <select 
+                        value={configId}
+                        onChange={(e) => setConfigId(e.target.value)}
+                        className="w-full bg-brand-surface border border-brand-border rounded-lg pl-4 pr-10 py-2.5 text-sm text-brand-text focus:outline-none focus:border-brand-accent transition-all cursor-pointer appearance-none shadow-sm"
+                        style={{ backgroundImage: "none" }}
+                      >
+                        <option value="1">Auto-Detect / Base Default Config</option>
+                        {(configs || []).map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.is_default && "(Custom Default)"}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted pointer-events-none" />
+                    </div>
+                    <p className="text-[11px] text-brand-text-muted mt-2 leading-relaxed">
+                      This determines the specific JSON schema (names, emails, experience) that Gemini will attempt to extract strictly from resumes uploaded to this Requisition.
+                    </p>
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div className="p-6 border-t border-brand-border/30 bg-brand-surface/20 flex justify-end gap-3">
