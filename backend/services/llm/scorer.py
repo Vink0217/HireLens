@@ -20,36 +20,53 @@ def build_scoring_prompt(
     Anti-pattern avoided: generic phrases like "candidate has relevant skills".
     Instead: "3 years at Razorpay as backend engineer, directly relevant to fintech JD".
     """
-    return f"""You are a senior technical recruiter evaluating candidate fit. You will score a candidate against a job description.
+    return f"""You are a senior technical recruiter. Score a candidate's fit against a job description using only evidence found in the resume. Do not award credit for skills or experience that are not explicitly present.
 
 JOB DESCRIPTION:
 {jd_text}
 
-CANDIDATE PROFILE (extracted):
+CANDIDATE PROFILE (extracted fields):
 {json.dumps(extracted, indent=2)}
 
 FULL RESUME TEXT:
 {resume_text}
 
 SCORING INSTRUCTIONS:
-- Score from 1 to 10 where:
-  1-3 = Poor fit (missing core requirements)
-  4-6 = Partial fit (has some requirements, notable gaps)
-  7-8 = Strong fit (meets most requirements, minor gaps)
-  9-10 = Exceptional fit (exceeds requirements)
 
-- Be specific. Reference actual content from the resume (project names, company names, specific skills, years).
-- Do NOT say things like "candidate has relevant experience." Say WHICH experience and WHY it is relevant.
-- Identify the top 2-3 strengths and top 1-2 gaps.
+Step 1 — Dealbreaker check. Before scoring, identify any requirements in the JD marked as mandatory (e.g., "must have", "required", "minimum X years"). If the candidate clearly fails a dealbreaker requirement, the score must be 3 or below, regardless of other strengths. Document each failed dealbreaker in "gaps".
 
-Return ONLY a valid JSON object in this exact format:
+Step 2 — Score 1–10 using this rubric:
+  1–3 = Fails one or more dealbreaker requirements
+  4–5 = Meets some requirements; significant gaps in core skills or experience level
+  6–7 = Meets most requirements with minor gaps; could ramp up quickly
+  8–9 = Meets all requirements; demonstrably has done similar work before
+  10  = Reserved for candidates who exceed all requirements with directly transferable achievements
+
+Step 3 — Write evidence-based justifications. Every strength and gap MUST name specific, verifiable details:
+  - BAD: "Candidate has relevant backend experience."
+  - GOOD: "2.5 years as backend engineer at Razorpay (2021–2023) building payment APIs — directly mirrors the fintech API work in the JD."
+  - BAD: "Candidate lacks cloud experience."
+  - GOOD: "JD requires AWS (EC2, RDS, Lambda); resume lists no cloud platforms of any kind."
+
+Step 4 — Set confidence based on resume completeness:
+  - "high": dates, titles, and responsibilities are all present and unambiguous
+  - "medium": some dates or responsibilities are missing; experience had to be partially inferred
+  - "low": resume is sparse, undated, or uses vague language that makes accurate scoring difficult
+
+Return ONLY a valid JSON object in this exact format — no markdown, no commentary:
 {{
-  "score": <integer 1-10>,
-  "summary": "<2-3 sentence overall assessment, specific to this candidate>",
-  "strengths": ["<specific strength 1>", "<specific strength 2>"],
-  "gaps": ["<specific gap 1>"],
+  "score": <integer 1–10>,
+  "summary": "<2–3 sentences: overall verdict with candidate name/role/years if available, specific to THIS JD>",
+  "strengths": [
+    "<[Company, role, duration] → specific relevance to JD requirement>",
+    "<specific skill/achievement → maps to which JD requirement>"
+  ],
+  "gaps": [
+    "<missing JD requirement → what the resume shows instead, or 'not mentioned'>",
+    "<dealbreaker failures, if any, clearly labelled>"
+  ],
   "confidence": "<high|medium|low>",
-  "confidence_reason": "<why you are confident or not in this score>"
+  "confidence_reason": "<specific reason: what data is present or missing that affects confidence>"
 }}"""
 
 
