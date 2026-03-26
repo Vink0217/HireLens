@@ -14,7 +14,9 @@ from db.resumes import (
     save_resume,
     check_duplicate,
     get_resume,
+    get_resume,
     list_resumes_for_job,
+    list_all_resumes,
     generate_content_hash,
 )
 from db.configs import get_default_config, get_config
@@ -175,10 +177,13 @@ async def upload_resume(
 
 
 @router.get("")
-async def list_resumes(job_id: str):
-    """List all resumes screened for a job, sorted by score descending."""
+async def list_resumes(job_id: str | None = None):
+    """List all resumes, optionally filtered by job_id."""
     pool = get_pool()
-    resumes = await list_resumes_for_job(pool, job_id)
+    if job_id:
+        resumes = await list_resumes_for_job(pool, job_id)
+    else:
+        resumes = await list_all_resumes(pool)
     return [_serialize(r) for r in resumes]
 
 
