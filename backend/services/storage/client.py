@@ -7,6 +7,8 @@ Falls back to local filesystem if CLOUDINARY_URL is not configured.
 
 import logging
 import os
+import re
+from datetime import datetime
 from pathlib import Path
 
 import cloudinary
@@ -52,13 +54,19 @@ async def upload_file(file_bytes: bytes, file_name: str) -> str:
         return _save_locally(file_bytes, file_name)
 
     try:
+        stem, ext = _split_name(file_name)
+        # Keep extension in public_id for raw uploads so downloads retain correct file type.
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+        safe_stem = _sanitize_stem(stem)
+        public_id = f"{safe_stem}-{timestamp}.{ext}" if ext else f"{safe_stem}-{timestamp}"
+
         result = cloudinary.uploader.upload(
             file_bytes,
             folder="hirelens-resumes",
             resource_type="raw",
-            public_id=file_name.rsplit(".", 1)[0],  # strip extension for public_id
+            public_id=public_id,
             overwrite=False,
-            unique_filename=True,
+            unique_filename=False,
         )
         url = result.get("secure_url", result.get("url", ""))
         logger.info("Uploaded to Cloudinary: %s", url)
@@ -89,7 +97,8 @@ async def delete_file(file_url: str) -> bool:
 
     try:
         # Extract public_id from Cloudinary URL
-        public_id = file_url.split("/hirelens-resumes/")[-1].rsplit(".", 1)[0]
+        public_id = file_url.split("/hirelens-resumes/")[-1]
+        public_id = public_id.split("?", 1)[0].split("#", 1)[0]
         full_id = f"hirelens-resumes/{public_id}"
         result = cloudinary.uploader.destroy(full_id, resource_type="raw")
         return result.get("result") == "ok"
@@ -114,3 +123,16 @@ def _save_locally(file_bytes: bytes, file_name: str) -> str:
     dest.write_bytes(file_bytes)
     logger.info("Saved locally: %s", dest)
     return str(dest)
+
+
+def _split_name(file_name: str) -> tuple[str, str]:
+    if "." not in file_name:
+        return file_name, ""
+    stem, ext = file_name.rsplit(".", 1)
+    return stem, ext.lower()
+
+
+def _sanitize_stem(stem: str) -> str:
+    # Cloudinary public IDs allow several characters, but normalize aggressively for stability.
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "-", stem).strip("-")
+    return cleaned or "resume"

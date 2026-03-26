@@ -6,8 +6,12 @@ This is the CORE pipeline of HireLens:
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from uuid import UUID
+import mimetypes
+from pathlib import Path
+from urllib.request import urlopen
 
 from core.config import settings
 from db import get_pool
@@ -203,6 +207,44 @@ async def get_resume_endpoint(resume_id: str):
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
     return _serialize(resume)
+
+
+@router.get("/{resume_id}/download")
+async def download_resume_endpoint(resume_id: str):
+    """Download resume with a proper filename and content type."""
+    pool = get_pool()
+    resume = await get_resume(pool, resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    file_url = resume.get("file_url")
+    if not file_url:
+        raise HTTPException(status_code=404, detail="Resume file URL not found")
+
+    file_name = resume.get("file_name") or f"resume-{resume_id}"
+    ext = (resume.get("file_type") or "").lower()
+    if ext and not file_name.lower().endswith(f".{ext}"):
+        file_name = f"{file_name}.{ext}"
+
+    content_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+
+    try:
+        if str(file_url).startswith("http"):
+            with urlopen(str(file_url)) as response:
+                content = response.read()
+        else:
+            local_path = Path(str(file_url))
+            if not local_path.exists():
+                raise FileNotFoundError(str(local_path))
+            content = local_path.read_bytes()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch resume file: {e}")
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{file_name}"',
+        "Cache-Control": "no-store",
+    }
+    return StreamingResponse(iter([content]), media_type=content_type, headers=headers)
 
 
 @router.post("/multi-role")
