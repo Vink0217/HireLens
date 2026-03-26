@@ -117,6 +117,28 @@ async def list_resumes_for_job(
     return [dict(row) for row in rows]
 
 
+async def list_all_resumes(pool: asyncpg.Pool) -> list[dict]:
+    """
+    List ALL resumes across the entire system.
+    Joins with jobs so we know what they applied for.
+    """
+    rows = await pool.fetch(
+        """
+        SELECT
+            r.id, r.file_name, r.file_url, r.file_type,
+            r.extracted_data, r.created_at,
+            s.score, s.summary, s.strengths, s.gaps,
+            s.confidence, s.created_at AS screened_at,
+            j.id AS job_id, j.title AS job_title, j.company AS job_company
+        FROM resumes r
+        LEFT JOIN screenings s ON s.resume_id = r.id
+        LEFT JOIN jobs j ON s.job_id = j.id
+        ORDER BY r.created_at DESC
+        """
+    )
+    return [dict(row) for row in rows]
+
+
 async def update_extracted_data(
     pool: asyncpg.Pool,
     resume_id: str,
