@@ -10,6 +10,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from uuid import UUID
 import mimetypes
+import math
+import re
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -30,6 +32,7 @@ from parsers import parse_pdf, parse_docx
 from services.llm.extractor import extract_fields
 from services.llm.scorer import score_resume
 from services.llm.ranker import rank_against_jobs
+from services.llm.embedder import chunk_resume, embed_text
 from services.storage import upload_file
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -247,6 +250,81 @@ async def download_resume_endpoint(resume_id: str):
     return StreamingResponse(iter([content]), media_type=content_type, headers=headers)
 
 
+@router.get("/{resume_id}/rag-evidence")
+async def rag_evidence_endpoint(resume_id: str, job_id: str, top_k: int = 5):
+    """Return top resume chunks most relevant to the selected job description."""
+    pool = get_pool()
+    resume = await get_resume(pool, resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    from db.jobs import get_job
+
+    job = await get_job(pool, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    raw_text = resume.get("raw_text") or ""
+    if not raw_text.strip():
+        return {"resume_id": resume_id, "job_id": job_id, "chunks": []}
+
+    chunks = chunk_resume(raw_text, resume_id)
+    if not chunks:
+        return {"resume_id": resume_id, "job_id": job_id, "chunks": []}
+
+    # Keep runtime practical for on-demand UI by embedding only a limited set of chunks.
+    limited_chunks = chunks[:20]
+    jd_text = job.get("description") or ""
+
+    if not jd_text.strip():
+        return {"resume_id": resume_id, "job_id": job_id, "chunks": []}
+
+    try:
+        jd_embedding = await embed_text(jd_text)
+        ranked: list[dict] = []
+
+        for item in limited_chunks:
+            chunk_text = (item.get("chunk_text") or "").strip()
+            if not chunk_text:
+                continue
+
+            chunk_embedding = await embed_text(chunk_text)
+            similarity = _cosine_similarity(jd_embedding, chunk_embedding)
+            ranked.append(
+                {
+                    "chunk_type": item.get("chunk_type", "other"),
+                    "chunk_text": chunk_text,
+                    "similarity": round(similarity, 4),
+                }
+            )
+
+        ranked.sort(key=lambda row: row["similarity"], reverse=True)
+        return {"resume_id": resume_id, "job_id": job_id, "chunks": ranked[:max(1, min(top_k, 10))]}
+
+    except Exception:
+        # Fallback lexical ranking if embedding service is unavailable.
+        job_terms = set(_tokenize(jd_text))
+        ranked: list[dict] = []
+
+        for item in limited_chunks:
+            chunk_text = (item.get("chunk_text") or "").strip()
+            if not chunk_text:
+                continue
+            terms = set(_tokenize(chunk_text))
+            overlap = len(job_terms & terms)
+            similarity = overlap / max(1, len(job_terms))
+            ranked.append(
+                {
+                    "chunk_type": item.get("chunk_type", "other"),
+                    "chunk_text": chunk_text,
+                    "similarity": round(similarity, 4),
+                }
+            )
+
+        ranked.sort(key=lambda row: row["similarity"], reverse=True)
+        return {"resume_id": resume_id, "job_id": job_id, "chunks": ranked[:max(1, min(top_k, 10))]}
+
+
 @router.post("/multi-role")
 async def multi_role_screening(body: MultiRoleRequest):
     """Score a single resume against multiple job descriptions."""
@@ -282,3 +360,28 @@ def _serialize(row: dict) -> dict:
         k: str(v) if hasattr(v, "hex") or hasattr(v, "isoformat") else v
         for k, v in row.items()
     }
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    size = min(len(a), len(b))
+    if size == 0:
+        return 0.0
+
+    dot = 0.0
+    mag_a = 0.0
+    mag_b = 0.0
+    for i in range(size):
+        av = float(a[i])
+        bv = float(b[i])
+        dot += av * bv
+        mag_a += av * av
+        mag_b += bv * bv
+
+    denom = math.sqrt(mag_a) * math.sqrt(mag_b)
+    if denom == 0:
+        return 0.0
+    return dot / denom
+
+
+def _tokenize(text: str) -> list[str]:
+    return [t for t in re.findall(r"[a-zA-Z]{3,}", text.lower()) if t]
