@@ -27,8 +27,8 @@ def generate_content_hash(raw_text: str, job_id: str) -> str:
     if email_match:
         identifier = email_match.group(0).lower()
     else:
-        alphas = re.sub(r'[^a-zA-Z]', '', raw_text).lower()
-        identifier = alphas[:30] if len(alphas) >= 30 else alphas
+        # Fallback to full normalized text
+        identifier = " ".join(raw_text.lower().split())
 
     content = f"{identifier}:{job_id}"
     return hashlib.sha256(content.encode()).hexdigest()

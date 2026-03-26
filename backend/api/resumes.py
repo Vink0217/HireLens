@@ -7,6 +7,7 @@ This is the CORE pipeline of HireLens:
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
+from uuid import UUID
 
 from core.config import settings
 from db import get_pool
@@ -126,18 +127,25 @@ async def upload_resume(
 
     extracted_data = await extract_fields(raw_text, fields)
 
+    import asyncpg
+    
     # ── Step 6: Save resume ────────────────────────────────
-    resume = await save_resume(
-        pool,
-        file_name=file_name,
-        file_url=file_url,
-        file_size=file_size,
-        file_type=ext,
-        raw_text=raw_text,
-        content_hash=content_hash,
-        extracted_data=extracted_data,
-        config_id=str(config["id"]) if config else None,
-    )
+    try:
+        resume = await save_resume(
+            pool,
+            file_name=file_name,
+            file_url=file_url,
+            file_size=file_size,
+            file_type=ext,
+            raw_text=raw_text,
+            content_hash=content_hash,
+            extracted_data=extracted_data,
+            config_id=str(config["id"]) if config else None,
+        )
+    except asyncpg.exceptions.UniqueViolationError:
+        raise HTTPException(
+            status_code=409, detail="Duplicate resume upload detected during concurrent DB transaction."
+        )
 
     # ── Step 7: Score against JD ───────────────────────────
     from db.jobs import get_job
@@ -202,6 +210,25 @@ async def multi_role_screening(body: MultiRoleRequest):
     """Score a single resume against multiple job descriptions."""
     results = await rank_against_jobs(body.resume_id, body.job_ids)
     return results
+
+
+@router.delete("/{resume_id}")
+async def delete_resume_endpoint(resume_id: str):
+    """Delete a resume and all its screenings via CASCADE."""
+    pool = get_pool()
+    
+    # Validate UUID format
+    try:
+        uuid_val = UUID(resume_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Resume ID format")
+    
+    row = await pool.fetchrow("SELECT id FROM resumes WHERE id = $1", uuid_val)
+    if not row:
+        raise HTTPException(status_code=404, detail="Resume not found")
+        
+    await pool.execute("DELETE FROM resumes WHERE id = $1", uuid_val)
+    return {"message": "Resume deleted successfully"}
 
 
 # ── Helpers ────────────────────────────────────────────────

@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS resumes (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_resumes_content_hash ON resumes (content_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_resumes_content_hash ON resumes (content_hash);
 CREATE INDEX IF NOT EXISTS idx_resumes_config_id    ON resumes (config_id);
 
 -- ─────────────────────────────────────────────────
