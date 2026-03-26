@@ -108,9 +108,11 @@ export default function JobDetailView() {
     } catch (error: any) {
       if (error.response?.status === 409) {
         alert("Duplicate Detcted: This exact resume has already been uploaded and scored for this role!");
+      } else if (error.response?.status === 503) {
+        alert(error.response?.data?.detail || "AI provider is temporarily busy. Please retry in a few seconds.");
       } else {
         console.error("Upload failed", error);
-        alert("Failed to upload and process resume. Check backend logs.");
+        alert(error.response?.data?.detail || "Failed to upload and process resume. Check backend logs.");
       }
     } finally {
       setIsUploading(false);

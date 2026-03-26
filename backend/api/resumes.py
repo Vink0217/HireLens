@@ -132,7 +132,16 @@ async def upload_resume(
     if isinstance(fields, str):
         fields = json.loads(fields)
 
-    extracted_data = await extract_fields(raw_text, fields)
+    try:
+        extracted_data = await extract_fields(raw_text, fields)
+    except RuntimeError as e:
+        message = str(e)
+        if "503" in message or "UNAVAILABLE" in message.upper() or "high demand" in message.lower():
+            raise HTTPException(
+                status_code=503,
+                detail="AI provider is temporarily busy. Please retry upload in a few seconds.",
+            )
+        raise
 
     import asyncpg
     
@@ -161,11 +170,20 @@ async def upload_resume(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    scoring_result = await score_resume(
-        resume_text=raw_text,
-        jd_text=job["description"],
-        extracted=extracted_data,
-    )
+    try:
+        scoring_result = await score_resume(
+            resume_text=raw_text,
+            jd_text=job["description"],
+            extracted=extracted_data,
+        )
+    except RuntimeError as e:
+        message = str(e)
+        if "503" in message or "UNAVAILABLE" in message.upper() or "high demand" in message.lower():
+            raise HTTPException(
+                status_code=503,
+                detail="AI scoring is temporarily unavailable. Please retry in a few seconds.",
+            )
+        raise
 
     # ── Step 8: Save screening ─────────────────────────────
     screening = await save_screening(
