@@ -1,0 +1,180 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Search, Filter, AlertCircle, Eye, Users } from "lucide-react";
+import { fetchAllResumes } from "@/lib/api";
+
+interface BackendResume {
+  id: string;
+  file_name: string;
+  file_type: string;
+  extracted_data?: any;
+  score?: number;
+  summary?: string;
+  confidence?: string;
+  screened_at?: string;
+  job_id?: string;
+  job_title?: string;
+  job_company?: string;
+}
+
+export default function GlobalCandidatesView() {
+  const [candidates, setCandidates] = useState<BackendResume[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlyHighMatch, setShowOnlyHighMatch] = useState(false);
+
+  useEffect(() => {
+    loadCandidates();
+  }, []);
+
+  const loadCandidates = async () => {
+    try {
+      setIsLoading(true);
+      const data = await fetchAllResumes();
+      setCandidates(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to load global candidates", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getCandidateName = (c: BackendResume) => {
+    if (!c.extracted_data) return c.file_name;
+    let data;
+    try {
+      data = typeof c.extracted_data === "string" ? JSON.parse(c.extracted_data) : c.extracted_data;
+    } catch (e) {
+      return c.file_name;
+    }
+    const name = data.name || data.full_name || data.candidate_name;
+    return name ? name : c.file_name;
+  };
+
+  let filteredCandidates = candidates.filter(c => 
+    getCandidateName(c).toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (c.job_title && c.job_title.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  if (showOnlyHighMatch) {
+    filteredCandidates = filteredCandidates.filter(c => (c.score || 0) >= 8);
+  }
+
+  return (
+    <div className="flex flex-col gap-8 animate-fade-in pb-12">
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-brand-border/30 pb-6 gap-4">
+        <div>
+          <h1 className="text-3xl font-display text-brand-text mb-1 tracking-wide flex items-center gap-3">
+            <Users size={28} className="text-brand-accent" />
+            Talent Pool
+          </h1>
+          <p className="text-sm text-brand-text-muted">Global directory of all processed candidates across all requisitions.</p>
+        </div>
+      </header>
+
+      <div className="flex items-center justify-between gap-4">
+         <div className="relative flex-1 max-w-sm">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" />
+            <input 
+              type="text" 
+              placeholder="Search by name or job title..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-brand-surface/50 border border-brand-border rounded-lg text-sm text-brand-text focus:border-brand-accent focus:bg-brand-surface focus:outline-none transition-all shadow-inner" 
+            />
+         </div>
+         <button 
+           onClick={() => setShowOnlyHighMatch(!showOnlyHighMatch)} 
+           className={`px-4 py-2.5 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${showOnlyHighMatch ? 'bg-brand-success/20 border-brand-success text-brand-success' : 'border-brand-border text-brand-text-muted hover:text-brand-text hover:bg-brand-surface'}`}
+         >
+           <Filter size={16} />
+           {showOnlyHighMatch ? 'High Matches Only' : 'Filter High Matches'}
+         </button>
+      </div>
+
+      <div className="bg-brand-bg-raised border border-brand-border/50 rounded-xl overflow-hidden min-h-[500px] shadow-lg">
+        <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-brand-border/50 bg-brand-surface/60 text-xs font-bold text-brand-text-muted tracking-wider uppercase">
+          <div className="col-span-3">Candidate</div>
+          <div className="col-span-3">Applied Role</div>
+          <div className="col-span-2">Match Score</div>
+          <div className="col-span-3">Analysis Snapshot</div>
+          <div className="col-span-1 text-right">View</div>
+        </div>
+
+        {isLoading ? (
+           <div className="flex justify-center items-center h-64">
+             <div className="w-8 h-8 rounded-full border-2 border-brand-accent border-t-transparent animate-spin"></div>
+           </div>
+        ) : filteredCandidates.length === 0 ? (
+           <div className="flex flex-col justify-center items-center h-64 text-center">
+             <Search size={32} className="text-brand-text-muted/30 mb-4" />
+             <p className="text-brand-text-muted mb-2 font-medium">No candidates found.</p>
+             <p className="text-xs text-brand-text-muted/60">Try adjusting your search or filters.</p>
+           </div>
+        ) : (
+          <div className="flex flex-col divide-y divide-brand-border/30">
+            {filteredCandidates.map((c) => {
+              const name = getCandidateName(c);
+              const isHighMatch = (c.score || 0) >= 8;
+              
+              return (
+                <div key={c.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-brand-surface/20 transition-colors group">
+                  <div className="col-span-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded bg-brand-surface border border-brand-border/50 flex items-center justify-center text-xs font-bold text-brand-accent uppercase shrink-0">
+                        {name.substring(0, 2)}
+                      </div>
+                      <div className="truncate">
+                        <p className="text-sm font-medium text-brand-text truncate" title={name}>{name}</p>
+                        <p className="text-[10px] text-brand-text-muted mt-0.5 uppercase tracking-wider">{c.file_type.replace('.', '')} • {new Date(c.screened_at || "").toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="col-span-3">
+                    <Link href={`/dashboard/jobs/${c.job_id}`} className="inline-flex flex-col group-hover:bg-brand-surface/50 px-3 py-1.5 rounded-lg transition-colors -ml-3">
+                      <p className="text-sm font-medium text-brand-accent truncate hover:underline" title={c.job_title}>{c.job_title}</p>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">{c.job_company || "HireLens Internal"}</p>
+                    </Link>
+                  </div>
+
+                  <div className="col-span-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`text-xl font-light w-8 text-center ${isHighMatch ? 'text-brand-success font-medium' : 'text-brand-text'}`}>
+                        {c.score || 0}
+                      </div>
+                      <div className="flex-1 h-1.5 bg-brand-surface rounded-full overflow-hidden max-w-[80px]">
+                        <div 
+                          className={`h-full rounded-full ${isHighMatch ? 'bg-brand-success shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'bg-brand-accent opacity-70'}`}
+                          style={{ width: `${(c.score || 0) * 10}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-span-3">
+                    <p className="text-xs text-brand-text-muted line-clamp-2 leading-relaxed">
+                      {c.summary || "No summary generated."}
+                    </p>
+                  </div>
+
+                  <div className="col-span-1 flex justify-end">
+                    <button 
+                      onClick={() => alert("Full resume viewer modal coming soon!")}
+                      className="p-2 text-brand-text-muted hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"
+                      title="View Full Profile"
+                    >
+                      <Eye size={18} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
