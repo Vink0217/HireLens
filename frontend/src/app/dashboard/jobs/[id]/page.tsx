@@ -16,9 +16,18 @@ import {
   Sparkles,
   Trophy,
   ExternalLink,
+  Layers3,
+  FileSearch,
 } from "lucide-react";
 import useSWR from "swr";
-import { uploadResume, fetcher } from "@/lib/api";
+import {
+  uploadResume,
+  fetcher,
+  runMultiRoleRanking,
+  fetchRagEvidence,
+  MultiRoleResult,
+  RagEvidenceChunk,
+} from "@/lib/api";
 
 interface BackendResume {
   id: string;
@@ -34,6 +43,12 @@ interface BackendResume {
 
 interface ResumeDetail extends BackendResume {
   raw_text?: string;
+}
+
+interface JobLite {
+  id: string;
+  title: string;
+  company?: string;
 }
 
 interface ParsedResumeData {
@@ -54,11 +69,21 @@ export default function JobDetailView() {
   const [isDragging, setIsDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<BackendResume | null>(null);
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
+  const [multiRoleResults, setMultiRoleResults] = useState<MultiRoleResult[]>([]);
+  const [isRunningMultiRole, setIsRunningMultiRole] = useState(false);
+  const [multiRoleError, setMultiRoleError] = useState<string | null>(null);
+  const [ragEvidence, setRagEvidence] = useState<RagEvidenceChunk[]>([]);
+  const [isLoadingRagEvidence, setIsLoadingRagEvidence] = useState(false);
+  const [ragError, setRagError] = useState<string | null>(null);
 
   const { data: candidatesData, error: candidatesError, mutate } = useSWR(`/resumes?job_id=${jobId}`, fetcher);
   const { data: jobData } = useSWR(`/jobs/${jobId}`, fetcher);
+  const { data: allJobsData } = useSWR<JobLite[]>("/jobs", fetcher);
 
   const candidates = (Array.isArray(candidatesData) ? candidatesData : candidatesData?.resumes || []) as BackendResume[];
+  const allJobs = Array.isArray(allJobsData) ? allJobsData : [];
+  const comparisonJobs = allJobs.filter((j) => j.id !== jobId);
   const jobTitle = jobData?.title || `Requirement: ${jobId.split("-")[0]}...`;
   const isLoading = !candidatesData && !candidatesError && !jobData;
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
@@ -143,6 +168,49 @@ export default function JobDetailView() {
     }
 
     alert("Resume file is unavailable right now.");
+  };
+
+  const toggleJobSelection = (jobIdValue: string) => {
+    setSelectedJobIds((prev) =>
+      prev.includes(jobIdValue)
+        ? prev.filter((id) => id !== jobIdValue)
+        : [...prev, jobIdValue]
+    );
+  };
+
+  const handleRunMultiRole = async () => {
+    if (!selectedCandidate || selectedJobIds.length === 0) {
+      setMultiRoleError("Select at least one additional role to compare.");
+      return;
+    }
+
+    setIsRunningMultiRole(true);
+    setMultiRoleError(null);
+    try {
+      const results = await runMultiRoleRanking(selectedCandidate.id, selectedJobIds);
+      setMultiRoleResults(results);
+    } catch (error: any) {
+      setMultiRoleError(error?.response?.data?.detail || "Failed to run multi-role ranking.");
+      setMultiRoleResults([]);
+    } finally {
+      setIsRunningMultiRole(false);
+    }
+  };
+
+  const handleLoadRagEvidence = async () => {
+    if (!selectedCandidate) return;
+
+    setIsLoadingRagEvidence(true);
+    setRagError(null);
+    try {
+      const data = await fetchRagEvidence(selectedCandidate.id, jobId, 4);
+      setRagEvidence(data.chunks || []);
+    } catch (error: any) {
+      setRagError(error?.response?.data?.detail || "Failed to load evidence snippets.");
+      setRagEvidence([]);
+    } finally {
+      setIsLoadingRagEvidence(false);
+    }
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -394,6 +462,11 @@ export default function JobDetailView() {
                         <button
                           onClick={() => {
                             setSelectedCandidate(c);
+                            setSelectedJobIds([]);
+                            setMultiRoleResults([]);
+                            setMultiRoleError(null);
+                            setRagEvidence([]);
+                            setRagError(null);
                           }}
                           className="inline-flex items-center gap-2 px-2.5 py-1.5 text-xs text-brand-text-muted hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"
                           title="View Full Analysis"
@@ -418,8 +491,21 @@ export default function JobDetailView() {
           analysis.overallScore >= 8 ? "text-brand-success" : analysis.overallScore >= 5 ? "text-brand-accent" : "text-brand-danger";
 
         return (
-          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4 md:p-6 overflow-y-auto">
-            <div className="max-w-5xl mx-auto border border-brand-border rounded-2xl bg-brand-bg-raised shadow-[0_20px_80px_rgba(0,0,0,0.5)] animate-fade-in">
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4 md:p-6 overflow-y-auto"
+            onClick={() => {
+              setSelectedCandidate(null);
+              setSelectedJobIds([]);
+              setMultiRoleResults([]);
+              setMultiRoleError(null);
+              setRagEvidence([]);
+              setRagError(null);
+            }}
+          >
+            <div
+              className="max-w-5xl mx-auto border border-brand-border rounded-2xl bg-brand-bg-raised shadow-[0_20px_80px_rgba(0,0,0,0.5)] animate-fade-in"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="p-5 md:p-6 border-b border-brand-border/40 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-brand-text-muted mb-2">Candidate Intelligence Panel</p>
@@ -429,6 +515,11 @@ export default function JobDetailView() {
                 <button
                   onClick={() => {
                     setSelectedCandidate(null);
+                    setSelectedJobIds([]);
+                    setMultiRoleResults([]);
+                    setMultiRoleError(null);
+                    setRagEvidence([]);
+                    setRagError(null);
                   }}
                   className="p-2 rounded-lg border border-brand-border text-brand-text-muted hover:text-brand-text hover:border-brand-accent transition-colors"
                   title="Close"
@@ -568,6 +659,95 @@ export default function JobDetailView() {
                           ? "Moderate fit. Consider screening call to validate depth in key skills before moving to interview panel."
                           : "Low current alignment with this role. Keep in talent pool for alternative openings with closer skill overlap."}
                     </p>
+                  </div>
+
+                  <div className="rounded-xl border border-brand-border/50 bg-brand-surface/25 p-4 md:p-5">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Layers3 size={16} className="text-brand-accent" />
+                        <p className="text-sm font-semibold text-brand-text">Multi-Role Ranking</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRunMultiRole}
+                        disabled={isRunningMultiRole || selectedJobIds.length === 0}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-accent text-black hover:bg-brand-accent-dim disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isRunningMultiRole ? "Running..." : "Compare"}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                      {comparisonJobs.length === 0 ? (
+                        <p className="text-xs text-brand-text-muted">Add more jobs to enable cross-role ranking.</p>
+                      ) : (
+                        comparisonJobs.map((job) => (
+                          <label
+                            key={job.id}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-border/50 bg-brand-surface/40 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedJobIds.includes(job.id)}
+                              onChange={() => toggleJobSelection(job.id)}
+                              className="accent-[#E0B355]"
+                            />
+                            <span className="text-xs text-brand-text truncate">{job.title}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+
+                    {multiRoleError && <p className="text-xs text-brand-danger mb-2">{multiRoleError}</p>}
+
+                    {multiRoleResults.length > 0 && (
+                      <div className="space-y-2">
+                        {multiRoleResults.map((result) => (
+                          <div key={result.job_id} className="rounded-lg border border-brand-border/40 bg-brand-bg/40 p-3">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-xs font-semibold text-brand-text truncate">{result.job_title}</p>
+                              <span className="text-xs font-bold text-brand-accent">{result.score}/10</span>
+                            </div>
+                            <p className="text-xs text-brand-text-muted line-clamp-2">{result.summary}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-brand-border/50 bg-brand-surface/25 p-4 md:p-5">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <FileSearch size={16} className="text-brand-accent" />
+                        <p className="text-sm font-semibold text-brand-text">RAG Evidence Snippets</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleLoadRagEvidence}
+                        disabled={isLoadingRagEvidence}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-surface border border-brand-border text-brand-text hover:border-brand-accent hover:text-brand-accent disabled:opacity-50 transition-colors"
+                      >
+                        {isLoadingRagEvidence ? "Loading..." : "Load Evidence"}
+                      </button>
+                    </div>
+
+                    {ragError && <p className="text-xs text-brand-danger mb-2">{ragError}</p>}
+
+                    {ragEvidence.length === 0 ? (
+                      <p className="text-xs text-brand-text-muted">Load to see resume chunks most relevant to this JD.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {ragEvidence.map((chunk, idx) => (
+                          <div key={`${chunk.chunk_type}-${idx}`} className="rounded-lg border border-brand-border/40 bg-brand-bg/40 p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-[11px] uppercase tracking-wider text-brand-accent">{chunk.chunk_type}</p>
+                              <p className="text-[11px] text-brand-text-muted">match {(chunk.similarity * 100).toFixed(1)}%</p>
+                            </div>
+                            <p className="text-xs text-brand-text-muted line-clamp-4">{chunk.chunk_text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                 </div>
