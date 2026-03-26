@@ -16,6 +16,9 @@ export const checkHealth = async () => {
   return data;
 };
 
+// Generic fetcher for SWR
+export const fetcher = (url: string) => api.get(url).then(res => res.data);
+
 // Job API endpoints
 export const fetchJobs = async () => {
   const { data } = await api.get("/jobs");
