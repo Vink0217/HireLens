@@ -2,25 +2,31 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Users, Clock, ArrowRight, MoreVertical } from "lucide-react";
-import { fetchJobs, createJob } from "@/lib/api";
+import { Plus, Users, Clock, ArrowRight, Trash2 } from "lucide-react";
+import { fetchJobs, createJob, deleteJob } from "@/lib/api";
 
 // Temporarily define interface
 interface Job {
   id: string;
   title: string;
   description: string;
+  company?: string;
   config_id: string | number;
   created_at?: string;
+  resume_count?: number;
+  top_score?: number;
 }
 
 export default function DashboardHome() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
+  const [deleteJobTitle, setDeleteJobTitle] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Form State
   const [title, setTitle] = useState("");
+  const [company, setCompany] = useState("");
   const [desc, setDesc] = useState("");
   const [configId, setConfigId] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,15 +51,37 @@ export default function DashboardHome() {
     if (!title) return;
     try {
       setIsSubmitting(true);
-      await createJob({ title, description: desc, config_id: Number(configId) });
+      await createJob({ title, description: desc, company, config_id: Number(configId) });
       setIsModalOpen(false);
       setTitle("");
+      setCompany("");
       setDesc("");
       loadJobs(); // refresh list
     } catch (error) {
       console.error("Failed to create job", error);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const confirmDelete = (id: string, titleStr: string) => {
+    setDeleteJobId(id);
+    setDeleteJobTitle(titleStr);
+  };
+
+  const handleDeleteJob = async () => {
+    if (!deleteJobId) return;
+    try {
+      setIsSubmitting(true);
+      await deleteJob(deleteJobId);
+      loadJobs();
+    } catch (error) {
+      console.error("Failed to delete job", error);
+      alert("Error deleting job. Check console.");
+    } finally {
+      setIsSubmitting(false);
+      setDeleteJobId(null);
+      setDeleteJobTitle("");
     }
   };
 
@@ -94,8 +122,12 @@ export default function DashboardHome() {
                 <div className="inline-flex px-2.5 py-1 rounded text-[10px] font-bold tracking-wider uppercase text-brand-bg bg-brand-accent/90">
                   Active
                 </div>
-                <button className="text-brand-text-muted hover:text-brand-text transition-colors">
-                  <MoreVertical size={16} />
+                <button 
+                  onClick={() => confirmDelete(job.id, job.title)}
+                  className="p-1.5 text-brand-text-muted hover:text-brand-danger hover:bg-brand-danger/10 rounded transition-colors"
+                  title="Delete Job"
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
 
@@ -104,11 +136,11 @@ export default function DashboardHome() {
                   {job.title}
                 </h2>
                 <div className="text-sm text-brand-text-muted flex items-center gap-1.5 mb-1">
-                  <span>FastAPI Backend</span>
+                  <span>{job.company || "HireLens Internal"}</span>
                 </div>
                 <div className="text-xs text-brand-text-muted flex items-center gap-1.5 mt-3">
                   <Clock size={12} />
-                  <span>Config ID: {job.config_id}</span>
+                  <span>Created {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}</span>
                 </div>
               </div>
 
@@ -117,7 +149,7 @@ export default function DashboardHome() {
                   <p className="text-[10px] text-brand-text-muted uppercase tracking-wider mb-1">Screened</p>
                   <div className="flex items-center gap-1.5 text-brand-text font-medium">
                     <Users size={14} className="text-brand-accent opacity-50" />
-                    <span className="opacity-50">API Pending</span>
+                    <span>{job.resume_count || 0} Candidates</span>
                   </div>
                 </div>
               </div>
@@ -156,6 +188,17 @@ export default function DashboardHome() {
               </div>
               
               <div>
+                <label className="block text-sm font-medium text-brand-text mb-1.5">Company / Department</label>
+                <input 
+                  type="text" 
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder="e.g. Engineering / Tech Operations" 
+                  className="w-full bg-brand-surface border border-brand-border rounded-lg px-4 py-2 text-brand-text placeholder:text-brand-text-muted/50 focus:outline-none focus:border-brand-accent transition-colors" 
+                />
+              </div>
+              
+              <div>
                 <label className="block text-sm font-medium text-brand-text mb-1.5">Requirements / JD Context</label>
                 <textarea 
                   rows={4} 
@@ -185,6 +228,42 @@ export default function DashboardHome() {
                 className="px-5 py-2.5 bg-brand-accent text-black text-sm font-medium rounded-lg hover:bg-brand-accent-dim transition-colors disabled:opacity-50"
               >
                 {isSubmitting ? "Saving..." : "Create Role"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteJobId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-brand-bg-raised border border-brand-danger/30 w-full max-w-md rounded-2xl shadow-[0_0_30px_rgba(224,102,102,0.15)] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-brand-border/30 flex justify-between items-center bg-brand-danger/5">
+              <h2 className="text-xl font-display text-brand-text flex items-center gap-2">
+                <Trash2 size={20} className="text-brand-danger" />
+                Delete Requirement
+              </h2>
+              <button disabled={isSubmitting} onClick={() => setDeleteJobId(null)} className="text-brand-text-muted hover:text-brand-text text-xl">&times;</button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-sm text-brand-text mb-4 leading-relaxed">
+                Are you sure you want to permanently delete <strong className="text-brand-text font-bold uppercase">{deleteJobTitle}</strong>?
+              </p>
+              <div className="text-xs text-brand-danger/90 bg-brand-danger/10 px-4 py-3 rounded-lg border border-brand-danger/20 flex gap-3">
+                <div className="mt-0.5"><Users size={14} className="opacity-80"/></div>
+                <p><strong>Warning:</strong> This will permanently erase all associated resume screenings and extracted Gemini data. This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-brand-border/30 bg-brand-surface/20 flex justify-end gap-3">
+              <button disabled={isSubmitting} onClick={() => setDeleteJobId(null)} className="px-5 py-2.5 text-sm font-medium text-brand-text-muted hover:text-brand-text transition-colors">Cancel</button>
+              <button 
+                onClick={handleDeleteJob} 
+                disabled={isSubmitting}
+                className="px-5 py-2.5 bg-brand-danger text-white text-sm font-bold rounded-lg hover:bg-red-500 shadow-[0_0_15px_rgba(224,102,102,0.3)] transition-all disabled:opacity-50"
+              >
+                {isSubmitting ? "Deleting..." : "Delete Forever"}
               </button>
             </div>
           </div>
