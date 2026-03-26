@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Plus, Users, Clock, ArrowRight, Trash2, Briefcase, Settings, ChevronDown } from "lucide-react";
 import useSWR from "swr";
 import { fetcher, createJob, deleteJob } from "@/lib/api";
@@ -19,6 +20,7 @@ interface Job {
 }
 
 export default function DashboardHome() {
+  const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
   const [deleteJobTitle, setDeleteJobTitle] = useState("");
@@ -103,14 +105,29 @@ export default function DashboardHome() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {jobs.map((job: Job) => (
-            <div key={job.id} className="group relative bg-brand-surface/30 border border-brand-border/50 hover:border-brand-accent/50 rounded-xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden flex flex-col h-full">
+            <div
+              key={job.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  router.push(`/dashboard/jobs/${job.id}`);
+                }
+              }}
+              className="group relative bg-brand-surface/30 border border-brand-border/50 hover:border-brand-accent/50 rounded-xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden flex flex-col h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/70"
+            >
               
               <div className="flex items-start justify-between mb-4">
                 <div className="inline-flex px-2.5 py-1 rounded text-[10px] font-bold tracking-wider uppercase text-brand-bg bg-brand-accent/90">
                   Active
                 </div>
                 <button 
-                  onClick={() => confirmDelete(job.id, job.title)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    confirmDelete(job.id, job.title);
+                  }}
                   className="p-1.5 text-brand-text-muted hover:text-brand-danger hover:bg-brand-danger/10 rounded transition-colors"
                   title="Delete Job"
                 >
@@ -141,8 +158,9 @@ export default function DashboardHome() {
                 </div>
               </div>
 
-              <Link 
+              <Link
                 href={`/dashboard/jobs/${job.id}`}
+                onClick={(e) => e.stopPropagation()}
                 className="mt-auto w-full py-2.5 px-4 rounded-lg bg-brand-surface border border-brand-border text-sm font-medium text-brand-text hover:bg-brand-accent hover:text-black hover:border-brand-accent transition-all duration-200 flex items-center justify-center gap-2"
               >
                 <span>Process Resumes</span>
