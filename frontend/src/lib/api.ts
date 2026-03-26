@@ -78,3 +78,8 @@ export const rescanConfig = async (configId: string) => {
   const { data } = await api.post(`/configs/${configId}/rescan`);
   return data;
 };
+
+export const deleteResume = async (resumeId: string) => {
+  const { data } = await api.delete(`/resumes/${resumeId}`);
+  return data;
+};
