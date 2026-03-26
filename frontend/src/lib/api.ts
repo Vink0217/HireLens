@@ -65,6 +65,16 @@ export const fetchAllResumes = async () => {
 };
 
 export const fetchConfigs = async () => {
-    // Optional: fetch available extraction configs if we implemented that
-    return [{ id: 1, name: "Default Config" }]; 
+  const { data } = await api.get("/configs");
+  return data;
+};
+
+export const updateConfig = async (configId: string, name: string, fields: any[]) => {
+  const { data } = await api.put(`/configs/${configId}`, { name, fields });
+  return data;
+};
+
+export const rescanConfig = async (configId: string) => {
+  const { data } = await api.post(`/configs/${configId}/rescan`);
+  return data;
 };
