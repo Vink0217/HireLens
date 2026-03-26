@@ -10,6 +10,12 @@ export const api = axios.create({
   },
 });
 
+export const checkHealth = async () => {
+  // Pings the backend health router: /api/health
+  const { data } = await api.get("/health");
+  return data;
+};
+
 // Job API endpoints
 export const fetchJobs = async () => {
   const { data } = await api.get("/jobs");

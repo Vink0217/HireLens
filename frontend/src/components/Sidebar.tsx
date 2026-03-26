@@ -18,10 +18,10 @@ export default function Sidebar() {
     <aside className="w-64 h-screen border-r border-brand-border/30 bg-brand-bg-raised flex flex-col pt-6 sticky top-0 shrink-0">
       
       {/* Brand */}
-      <div className="px-6 mb-10 flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-brand-accent animate-pulse-slow"></div>
-        <span className="font-display text-2xl tracking-wide text-brand-text">
-          HireLens
+      <div className="px-6 mb-10 flex items-center gap-3">
+        <div className="w-2.5 h-2.5 rounded-full bg-brand-accent animate-pulse-slow shadow-[0_0_10px_rgba(224,179,85,0.4)]"></div>
+        <span className="font-body font-bold text-2xl tracking-tight text-brand-text">
+          Hire<span className="text-brand-accent">Lens</span>
         </span>
       </div>
 

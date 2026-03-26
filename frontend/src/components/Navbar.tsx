@@ -5,9 +5,9 @@ export default function Navbar() {
     <nav className="fixed top-0 w-full z-50 px-6 py-4 flex items-center justify-between border-b border-brand-border/30 bg-brand-bg/60 backdrop-blur-md">
       {/* Wordmark */}
       <div className="flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-brand-accent animate-pulse-slow"></div>
-        <span className="font-display text-2xl tracking-wide text-brand-text">
-          HireLens
+        <div className="w-2.5 h-2.5 rounded-full bg-brand-accent animate-pulse-slow"></div>
+        <span className="font-body font-bold text-xl tracking-tight text-brand-text">
+          Hire<span className="text-brand-accent">Lens</span>
         </span>
       </div>
 
