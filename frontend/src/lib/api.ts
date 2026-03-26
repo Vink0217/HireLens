@@ -22,8 +22,18 @@ export const fetchJobs = async () => {
   return data;
 };
 
-export const createJob = async (jobData: { title: string; description: string; config_id: number }) => {
+export const createJob = async (jobData: { title: string; description: string; company?: string; config_id: number }) => {
   const { data } = await api.post("/jobs", jobData);
+  return data;
+};
+
+export const fetchJob = async (jobId: string) => {
+  const { data } = await api.get(`/jobs/${jobId}`);
+  return data;
+};
+
+export const deleteJob = async (jobId: string) => {
+  const { data } = await api.delete(`/jobs/${jobId}`);
   return data;
 };
 
