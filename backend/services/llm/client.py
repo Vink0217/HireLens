@@ -46,7 +46,7 @@ async def call_gemini(prompt: str, max_tokens: int = 1500) -> dict:
             model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
-                max_output_tokens=max_tokens,
+                max_output_tokens=8192,
                 temperature=0.2,  # low temp for structured extraction/scoring
                 response_mime_type="application/json",  # enforce JSON natively
             ),
