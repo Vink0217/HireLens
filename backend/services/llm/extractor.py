@@ -4,10 +4,35 @@ and calls Gemini to extract structured data from resume text.
 """
 
 import logging
+import re
 
 from services.llm.client import call_gemini
 
 logger = logging.getLogger(__name__)
+
+
+def _slugify_field_key(value: str) -> str:
+    """Convert free-form field names into safe snake_case keys."""
+    key = re.sub(r"[^a-zA-Z0-9]+", "_", value.strip().lower())
+    return key.strip("_") or "field"
+
+
+def _normalize_field(field: dict) -> dict:
+    """Normalize config field variants to a single shape used by the extractor."""
+    raw_key = field.get("key") or field.get("name") or field.get("label") or "field"
+    key = _slugify_field_key(str(raw_key))
+    label = str(field.get("label") or field.get("name") or key)
+    field_type = str(field.get("type") or "string")
+    description = field.get("description")
+    required = bool(field.get("required", False))
+
+    return {
+        "key": key,
+        "label": label,
+        "type": field_type,
+        "description": description,
+        "required": required,
+    }
 
 
 def build_extraction_prompt(raw_text: str, fields: list[dict]) -> str:
@@ -17,9 +42,10 @@ def build_extraction_prompt(raw_text: str, fields: list[dict]) -> str:
     Each field dict has: key, label, required (bool), type (string|integer|array).
     The prompt instructs Gemini to return a JSON object with exactly these keys.
     """
+    normalized_fields = [_normalize_field(f) for f in fields]
     field_spec = "\n".join(
-        f'- "{f["key"]}": {f["label"]} ({f.get("description", f.get("type", "string"))})'
-        for f in fields
+        f'- "{f["key"]}": {f["label"]} ({f.get("description") or f.get("type", "string")})'
+        for f in normalized_fields
     )
 
     return f"""You are a resume parser. Your only job is to extract data from resume text into a strict JSON schema. You do not infer, embellish, or guess.
@@ -57,11 +83,12 @@ async def extract_fields(raw_text: str, fields: list[dict]) -> dict:
     Returns:
         Dictionary of extracted field values.
     """
-    prompt = build_extraction_prompt(raw_text, fields)
+    normalized_fields = [_normalize_field(f) for f in fields]
+    prompt = build_extraction_prompt(raw_text, normalized_fields)
     result = await call_gemini(prompt, max_tokens=1500)
 
     # Validate: fill in None for any missing required fields
-    for field in fields:
+    for field in normalized_fields:
         if field["key"] not in result:
             result[field["key"]] = None
             if field.get("required"):
