@@ -11,6 +11,15 @@ interface ConfigField {
   description: string;
 }
 
+const DEFAULT_VISIBLE_FIELDS = 3;
+const RECOMMENDED_MAX_FIELDS = 12;
+
+const normalizeField = (field: Partial<ConfigField>): ConfigField => ({
+  name: typeof field.name === "string" ? field.name : "",
+  type: typeof field.type === "string" ? field.type : "string",
+  description: typeof field.description === "string" ? field.description : "",
+});
+
 interface ExtractionConfig {
   id: string;
   name: string;
@@ -24,6 +33,7 @@ export default function ExtractionConfigView() {
   const [activeConfigId, setActiveConfigId] = useState<string>("");
   const [configName, setConfigName] = useState("");
   const [fields, setFields] = useState<ConfigField[]>([]);
+  const [showAllFields, setShowAllFields] = useState(false);
   
   const [isSaving, setIsSaving] = useState(false);
   const [isRescanning, setIsRescanning] = useState(false);
@@ -37,7 +47,8 @@ export default function ExtractionConfigView() {
       setConfigName(defaultConfig.name);
       try {
         const parsed = typeof defaultConfig.fields === 'string' ? JSON.parse(defaultConfig.fields) : defaultConfig.fields;
-        setFields(Array.isArray(parsed) ? parsed : []);
+        setFields(Array.isArray(parsed) ? parsed.map((item) => normalizeField(item)) : []);
+        setShowAllFields(false);
       } catch (e) {
         setFields([]);
       }
@@ -97,6 +108,8 @@ export default function ExtractionConfigView() {
       </div>
     );
   }
+
+  const visibleFields = showAllFields ? fields : fields.slice(0, DEFAULT_VISIBLE_FIELDS);
 
   return (
     <div className="flex flex-col gap-8 animate-fade-in pb-12 max-w-5xl mx-auto">
@@ -166,6 +179,12 @@ export default function ExtractionConfigView() {
             </button>
           </div>
 
+          {fields.length > RECOMMENDED_MAX_FIELDS && (
+            <p className="text-xs text-brand-accent mb-4">
+              Recommended maximum is around {RECOMMENDED_MAX_FIELDS} fields for clean prompts and better extraction accuracy.
+            </p>
+          )}
+
           <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-brand-surface/50 rounded-t-lg border-b border-brand-border/50 text-xs font-bold text-brand-text-muted uppercase tracking-wider">
             <div className="col-span-3">Field Key Name</div>
             <div className="col-span-2">Data Type</div>
@@ -174,13 +193,13 @@ export default function ExtractionConfigView() {
           </div>
 
           <div className="flex flex-col divide-y divide-brand-border/30 border-x border-b border-brand-border/30 rounded-b-lg">
-            {fields.map((field, index) => (
+            {visibleFields.map((field, index) => (
               <div key={index} className="grid grid-cols-12 gap-4 px-4 py-4 items-center group hover:bg-brand-surface/20 transition-colors">
                 
                 <div className="col-span-3">
                   <input 
                     type="text" 
-                    value={field.name}
+                    value={field.name ?? ""}
                     placeholder="e.g. total_years_experience"
                     onChange={(e) => handleFieldChange(index, "name", e.target.value.toLowerCase().replace(/\s+/g, '_'))}
                     className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-sm text-brand-text focus:outline-none focus:border-brand-accent transition-all font-mono"
@@ -189,7 +208,7 @@ export default function ExtractionConfigView() {
                 
                 <div className="col-span-2">
                   <select 
-                    value={field.type}
+                    value={field.type ?? "string"}
                     onChange={(e) => handleFieldChange(index, "type", e.target.value)}
                     className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-sm text-brand-text focus:outline-none focus:border-brand-accent transition-all cursor-pointer font-mono"
                   >
@@ -203,7 +222,7 @@ export default function ExtractionConfigView() {
                 <div className="col-span-6">
                   <input 
                     type="text" 
-                    value={field.description}
+                    value={field.description ?? ""}
                     placeholder="e.g. Calculate the total years of relevant work experience..."
                     onChange={(e) => handleFieldChange(index, "description", e.target.value)}
                     className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-sm text-brand-text focus:outline-none focus:border-brand-accent transition-all"
@@ -234,6 +253,18 @@ export default function ExtractionConfigView() {
               </div>
             )}
           </div>
+
+          {fields.length > DEFAULT_VISIBLE_FIELDS && (
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowAllFields((prev) => !prev)}
+                className="text-sm font-medium text-brand-accent hover:text-[#F2D070] transition-colors"
+              >
+                {showAllFields ? "Show Only First 3" : `Show All Fields (${fields.length})`}
+              </button>
+            </div>
+          )}
 
         </div>
       </div>
