@@ -52,12 +52,30 @@ async def rank_against_jobs(
 
     # Score in parallel
     async def _score_one(job: dict) -> dict:
+        max_attempts = 3
         try:
-            result = await score_resume(
-                resume_text=resume["raw_text"],
-                jd_text=job["description"],
-                extracted=resume.get("extracted_data") or {},
-            )
+            last_error = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    result = await score_resume(
+                        resume_text=resume["raw_text"],
+                        jd_text=job["description"],
+                        extracted=resume.get("extracted_data") or {},
+                    )
+                    break
+                except Exception as e:
+                    last_error = e
+                    message = str(e)
+                    is_retryable = "503" in message or "UNAVAILABLE" in message
+                    if not is_retryable or attempt == max_attempts:
+                        raise
+
+                    # Short exponential-ish backoff for temporary model saturation.
+                    await asyncio.sleep(attempt * 1.2)
+
+            if not isinstance(result, dict):
+                raise RuntimeError(f"Unexpected scoring result: {last_error}")
+
             return {
                 "job_id": str(job["id"]),
                 "job_title": job["title"],
