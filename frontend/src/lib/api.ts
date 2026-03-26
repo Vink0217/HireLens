@@ -56,6 +56,11 @@ export const fetchResumesForJob = async (jobId: string) => {
   return data;
 };
 
+export const fetchAllResumes = async () => {
+  const { data } = await api.get(`/resumes`);
+  return data;
+};
+
 export const fetchConfigs = async () => {
     // Optional: fetch available extraction configs if we implemented that
     return [{ id: 1, name: "Default Config" }]; 
