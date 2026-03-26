@@ -4,8 +4,7 @@
 HireLens is an AI resume screening system built for Sprinto's AI Implementation Intern assignment. It parses PDF and DOCX resumes, extracts structured candidate fields from configurable schemas, scores candidate fit against job descriptions with evidence, flags duplicate submissions per role, supports re-parsing when extraction schemas change, and provides multi-role ranking and RAG-backed evidence snippets for recruiter review.
 
 ## Live Demo
-- Application URL: `https://<your-live-url>`
-- Loom Demo (under 3 minutes): `https://www.loom.com/share/<your-video-id>`
+- Application URL: [https://hire-lens-tau.vercel.app/](https://hire-lens-tau.vercel.app/)
 
 ## Features
 
