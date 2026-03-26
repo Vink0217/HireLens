@@ -112,7 +112,7 @@ export default function BatchUploadView() {
             <button 
               onClick={uploadAll}
               disabled={isProcessingTotal || !selectedJob}
-              className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${isProcessingTotal ? 'bg-brand-surface text-brand-text-muted cursor-not-allowed' : 'bg-brand-accent text-brand-bg hover:brightness-110 shadow-[0_0_10px_rgba(224,179,85,0.3)]'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${isProcessingTotal ? 'bg-brand-surface text-brand-text-muted cursor-not-allowed' : 'bg-brand-accent text-brand-bg hover:brightness-110 shadow-[0_0_10px_rgba(212,234,99,0.3)]'}`}
             >
               {isProcessingTotal && <Loader2 size={16} className="animate-spin" />}
               {isProcessingTotal ? 'Processing via Gemini...' : 'Start Batch Analysis'}
@@ -123,7 +123,7 @@ export default function BatchUploadView() {
               <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-brand-surface/20 transition-colors">
                 <div className="flex items-center gap-3 overflow-hidden">
                   {f.status === "success" && <CheckCircle size={18} className="text-brand-success shrink-0" />}
-                  {f.status === "duplicate" && <AlertCircle size={18} className="text-[#F2D070] shrink-0" />}
+                  {f.status === "duplicate" && <AlertCircle size={18} className="text-[#D4EA63] shrink-0" />}
                   {f.status === "error" && <AlertCircle size={18} className="text-brand-danger shrink-0" />}
                   {f.status === "uploading" && <Loader2 size={18} className="text-brand-accent animate-spin shrink-0" />}
                   {f.status === "pending" && <FileText size={18} className="text-brand-text-muted shrink-0" />}
@@ -131,7 +131,7 @@ export default function BatchUploadView() {
                   <p className="text-sm font-medium text-brand-text truncate">{f.file.name}</p>
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
-                  {f.message && <span className={`text-xs font-bold uppercase tracking-wider ${f.status === 'duplicate' ? 'text-[#F2D070]' : 'text-brand-danger'}`}>{f.message}</span>}
+                  {f.message && <span className={`text-xs font-bold uppercase tracking-wider ${f.status === 'duplicate' ? 'text-[#D4EA63]' : 'text-brand-danger'}`}>{f.message}</span>}
                   
                   {f.status === "pending" || f.status === "error" ? (
                     <button onClick={() => removeFile(i)} className="p-1.5 text-brand-text-muted hover:text-brand-danger rounded-lg hover:bg-brand-danger/10 transition-colors">

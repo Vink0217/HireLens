@@ -85,7 +85,7 @@ export default function DashboardHome() {
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="px-5 py-2.5 bg-brand-accent text-black font-semibold text-sm rounded-lg hover:bg-brand-accent-dim transition-all duration-200 flex items-center gap-2 active:scale-95 shadow-[0_0_15px_rgba(224,179,85,0.2)] cursor-pointer"
+          className="px-5 py-2.5 bg-brand-accent text-black font-semibold text-sm rounded-lg hover:bg-brand-accent-dim transition-all duration-200 flex items-center gap-2 active:scale-95 shadow-[0_0_15px_rgba(212,234,99,0.25)] cursor-pointer"
         >
           <Plus size={16} strokeWidth={2.5} />
           <span>New Job Requirement</span>

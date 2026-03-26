@@ -18,22 +18,22 @@
 }
 
 :root {
-  /* Dark, warm, highly-premium SaaS palette */
-  --color-bg: #0a0a0a;
-  --color-bg-raised: #121212;
-  --color-surface: #1a1918;
+  /* Sprinto-inspired palette: deep magenta surfaces with lime accent */
+  --color-bg: #220018;
+  --color-bg-raised: #320022;
+  --color-surface: #4a0635;
   
-  --color-text: #f5f4ef;
-  --color-text-muted: #96938a;
+  --color-text: #fff3fb;
+  --color-text-muted: #d7afca;
   
-  --color-accent: #e0b355;       /* Warm amber/gold */
-  --color-accent-dim: #c29944;
+  --color-accent: #d4ea63;
+  --color-accent-dim: #bdd24f;
   
   --color-success: #34d399;      /* Emerald */
   --color-warning: #fbbf24;      /* Amber */
   --color-danger: #f87171;       /* Red */
   
-  --color-border: #262523;
+  --color-border: #7a2d5d;
 }
 
 body {

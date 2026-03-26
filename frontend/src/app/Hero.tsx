@@ -21,7 +21,7 @@ export default function Hero() {
 
       {/* CTAs */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mt-4 animate-fade-up delay-300">
-        <button className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-brand-accent text-black font-semibold text-base hover:bg-brand-accent-dim hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(224,179,85,0.3)] hover:shadow-[0_0_30px_rgba(224,179,85,0.5)] cursor-pointer">
+        <button className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-brand-accent text-black font-semibold text-base hover:bg-brand-accent-dim hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(212,234,99,0.3)] hover:shadow-[0_0_30px_rgba(212,234,99,0.5)] cursor-pointer">
           Start Screening
         </button>
         <button className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-transparent border border-brand-border text-brand-text font-medium text-base hover:bg-brand-surface hover:border-brand-text-muted transition-all duration-300 cursor-pointer">

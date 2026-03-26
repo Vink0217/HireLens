@@ -147,7 +147,7 @@ export default function ExtractionConfigView() {
             <button 
               onClick={handleSave}
               disabled={isSaving}
-              className="px-6 py-2.5 bg-brand-accent text-brand-bg font-bold rounded-lg hover:brightness-110 transition-all shadow-[0_0_15px_rgba(224,179,85,0.2)] flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed h-fit"
+              className="px-6 py-2.5 bg-brand-accent text-brand-bg font-bold rounded-lg hover:brightness-110 transition-all shadow-[0_0_15px_rgba(212,234,99,0.25)] flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed h-fit"
             >
               {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
               {isSaving ? "Saving..." : "Save Schema"}
@@ -172,7 +172,7 @@ export default function ExtractionConfigView() {
             </h3>
             <button 
               onClick={handleAddField}
-              className="text-sm font-bold text-brand-accent hover:text-[#F2D070] transition-colors flex items-center gap-1"
+              className="text-sm font-bold text-brand-accent hover:text-[#E4F492] transition-colors flex items-center gap-1"
             >
               <Plus size={16} />
               Add Field

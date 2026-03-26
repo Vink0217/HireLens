@@ -536,7 +536,7 @@ export default function JobDetailView() {
                       <div
                         className="absolute inset-0 rounded-full"
                         style={{
-                          background: `conic-gradient(rgba(224,179,85,0.95) ${analysis.overallScore * 10}%, rgba(255,255,255,0.08) ${analysis.overallScore * 10}% 100%)`,
+                          background: `conic-gradient(rgba(212,234,99,0.95) ${analysis.overallScore * 10}%, rgba(255,255,255,0.08) ${analysis.overallScore * 10}% 100%)`,
                         }}
                       />
                       <div className="absolute inset-3 rounded-full bg-brand-bg-raised flex flex-col items-center justify-center border border-brand-border/40">
@@ -690,7 +690,7 @@ export default function JobDetailView() {
                               type="checkbox"
                               checked={selectedJobIds.includes(job.id)}
                               onChange={() => toggleJobSelection(job.id)}
-                              className="accent-[#E0B355]"
+                              className="accent-[#D4EA63]"
                             />
                             <span className="text-xs text-brand-text truncate">{job.title}</span>
                           </label>

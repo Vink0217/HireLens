@@ -287,7 +287,7 @@ export default function GlobalCandidatesView() {
          <div className="relative" ref={filterMenuRef}>
            <button 
              onClick={() => setIsFilterOpen(!isFilterOpen)}
-             className={`px-4 py-2.5 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${(selectedRole !== "All Roles" || minScore > 0) ? 'bg-brand-accent/10 border-brand-accent text-brand-accent shadow-[0_0_10px_rgba(224,179,85,0.2)]' : 'bg-brand-surface border-brand-border text-brand-text hover:border-brand-accent/50'} cursor-pointer`}
+             className={`px-4 py-2.5 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${(selectedRole !== "All Roles" || minScore > 0) ? 'bg-brand-accent/10 border-brand-accent text-brand-accent shadow-[0_0_10px_rgba(212,234,99,0.25)]' : 'bg-brand-surface border-brand-border text-brand-text hover:border-brand-accent/50'} cursor-pointer`}
            >
              <Filter size={16} />
              Filters {(selectedRole !== "All Roles" || minScore > 0) && "(Active)"}
@@ -564,7 +564,7 @@ export default function GlobalCandidatesView() {
                             type="checkbox"
                             checked={selectedJobIds.includes(job.id)}
                             onChange={() => toggleJobSelection(job.id)}
-                            className="accent-[#E0B355]"
+                            className="accent-[#D4EA63]"
                           />
                           <span className="text-xs text-brand-text truncate">{job.title}</span>
                         </label>

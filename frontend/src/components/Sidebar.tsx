@@ -19,7 +19,7 @@ export default function Sidebar() {
       
       {/* Brand */}
       <div className="px-6 mb-10 flex items-center gap-3">
-        <div className="w-2.5 h-2.5 rounded-full bg-brand-accent animate-pulse-slow shadow-[0_0_10px_rgba(224,179,85,0.4)]"></div>
+        <div className="w-2.5 h-2.5 rounded-full bg-brand-accent animate-pulse-slow shadow-[0_0_10px_rgba(212,234,99,0.45)]"></div>
         <span className="font-body font-bold text-2xl tracking-tight text-brand-text">
           Hire<span className="text-brand-accent">Lens</span>
         </span>
