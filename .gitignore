@@ -25,4 +25,5 @@ out/
 
 # Uploads (local dev)
 backend/tests
-/docs
+docs/
+Resumes/
