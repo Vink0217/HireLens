@@ -12,15 +12,25 @@ from uuid import UUID
 import asyncpg
 
 
+import re
+
 def generate_content_hash(raw_text: str, job_id: str) -> str:
     """
-    Generate SHA-256 hash of (normalized_text + job_id).
-
-    Same resume for a DIFFERENT job is NOT a duplicate.
-    This is intentional — a candidate can apply to multiple roles.
+    Generate SHA-256 hash to prevent duplicate parsing.
+    Instead of hashing raw text (which differs between PDF and DOCX parsers),
+    we extract the first email found via Regex. 
+    If no email is found, we extract the first 30 alpha characters as a fallback identifier.
+    Same candidate applying for a DIFFERENT job_id is NOT a duplicate.
     """
-    normalized = " ".join(raw_text.lower().split())  # normalize whitespace/case
-    content = f"{normalized}:{job_id}"
+    email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', raw_text)
+    
+    if email_match:
+        identifier = email_match.group(0).lower()
+    else:
+        alphas = re.sub(r'[^a-zA-Z]', '', raw_text).lower()
+        identifier = alphas[:30] if len(alphas) >= 30 else alphas
+
+    content = f"{identifier}:{job_id}"
     return hashlib.sha256(content.encode()).hexdigest()
 
 
