@@ -94,7 +94,7 @@ export default function ExtractionConfigView() {
     setRescanMessage(null);
     try {
       await rescanConfig(activeConfigId);
-      setRescanMessage({ text: "Retroactive rescan started. Live progress will appear below.", type: 'success' });
+      setRescanMessage({ text: "Retroactive rescan started. Existing resumes are being re-extracted and re-scored.", type: 'success' });
       const status = await fetchRescanStatus(activeConfigId);
       setRescanStatus(status);
     } catch (error) {
@@ -120,7 +120,7 @@ export default function ExtractionConfigView() {
 
         if (status.status === "completed") {
           setRescanMessage({
-            text: `Rescan finished: ${status.success}/${status.total} resumes reprocessed successfully.${status.failed > 0 ? ` ${status.failed} failed.` : ""}`,
+            text: `Rescan finished: ${status.success}/${status.total} resumes reprocessed and rescored successfully.${status.failed > 0 ? ` ${status.failed} failed.` : ""}`,
             type: status.failed > 0 ? "error" : "success",
           });
         }
@@ -172,7 +172,7 @@ export default function ExtractionConfigView() {
       </header>
 
       <p className="text-xs text-brand-text-muted -mt-5">
-        Retroactive rescan reprocesses all existing resumes with the current extraction schema.
+        Retroactive rescan reprocesses all existing resumes with the current extraction schema and refreshes their screening output.
       </p>
 
       {rescanMessage && (

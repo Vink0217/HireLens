@@ -50,6 +50,50 @@ async def save_screening(
     return dict(row)
 
 
+async def update_screening(
+    pool: asyncpg.Pool,
+    *,
+    resume_id: str,
+    job_id: str,
+    score: int,
+    summary: str,
+    strengths: list[str],
+    gaps: list[str],
+    confidence: str,
+    confidence_reason: str,
+    raw_llm_response: dict | None = None,
+) -> dict:
+    """Update an existing screening result for a specific resume × job pair."""
+    row = await pool.fetchrow(
+        """
+        UPDATE screenings
+        SET
+            score = $3,
+            summary = $4,
+            strengths = $5,
+            gaps = $6,
+            confidence = $7,
+            confidence_reason = $8,
+            raw_llm_response = $9,
+            created_at = NOW()
+        WHERE resume_id = $1 AND job_id = $2
+        RETURNING id, resume_id, job_id, score, summary,
+                  strengths, gaps, confidence, confidence_reason,
+                  created_at
+        """,
+        UUID(resume_id),
+        UUID(job_id),
+        score,
+        summary,
+        strengths,
+        gaps,
+        confidence,
+        confidence_reason,
+        json.dumps(raw_llm_response) if raw_llm_response else None,
+    )
+    return dict(row) if row else None
+
+
 async def get_screening(
     pool: asyncpg.Pool, resume_id: str, job_id: str
 ) -> dict | None:

@@ -13,7 +13,9 @@ import asyncpg
 
 from db.resumes import update_extracted_data
 from db.configs import get_config
+from db.screenings import update_screening
 from services.llm.extractor import extract_fields
+from services.llm.scorer import score_resume
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +87,42 @@ async def batch_reparse(
         try:
             extracted = await extract_fields(row["raw_text"], fields)
             await update_extracted_data(pool, resume_id, extracted)
+
+            # Re-score every existing screening tied to this resume so visible
+            # ranking cards and summaries stay in sync with refreshed extraction.
+            screening_rows = await pool.fetch(
+                """
+                SELECT s.job_id, j.description AS jd_text
+                FROM screenings s
+                JOIN jobs j ON j.id = s.job_id
+                WHERE s.resume_id = $1
+                """,
+                row["id"],
+            )
+
+            for screening_row in screening_rows:
+                job_id = str(screening_row["job_id"])
+                jd_text = screening_row["jd_text"] or ""
+                scoring_result = await score_resume(
+                    resume_text=row["raw_text"],
+                    jd_text=jd_text,
+                    extracted=extracted,
+                )
+                await update_screening(
+                    pool,
+                    resume_id=resume_id,
+                    job_id=job_id,
+                    score=scoring_result["score"],
+                    summary=scoring_result["summary"],
+                    strengths=scoring_result["strengths"],
+                    gaps=scoring_result["gaps"],
+                    confidence=scoring_result["confidence"],
+                    confidence_reason=scoring_result["confidence_reason"],
+                    raw_llm_response=scoring_result,
+                )
+
             results.append({"resume_id": resume_id, "status": "ok"})
-            logger.info("Re-parsed resume %s", resume_id)
+            logger.info("Re-parsed and re-scored resume %s", resume_id)
             success += 1
         except Exception as e:
             results.append({"resume_id": resume_id, "status": f"error: {e}"})

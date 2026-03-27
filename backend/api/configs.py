@@ -86,7 +86,7 @@ async def update_config_endpoint(config_id: str, body: ConfigUpdate):
 @router.post("/{config_id}/rescan")
 async def rescan_resumes(config_id: str, background_tasks: BackgroundTasks):
     """
-    Trigger a batch re-extraction for all resumes using this config.
+    Trigger a batch re-extraction and re-scoring for resumes using this config.
 
     Runs as a FastAPI background task so the request returns immediately.
     """
@@ -100,7 +100,7 @@ async def rescan_resumes(config_id: str, background_tasks: BackgroundTasks):
     _rescan_status[config_id] = {
         "config_id": config_id,
         "status": "queued",
-        "message": "Re-extraction queued",
+        "message": "Re-extraction and re-scoring queued",
         "total": 0,
         "processed": 0,
         "success": 0,
@@ -117,7 +117,7 @@ async def rescan_resumes(config_id: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(batch_reparse, pool, config_id, _update_progress)
 
     return {
-        "message": "Re-extraction started in background",
+        "message": "Re-extraction and re-scoring started in background",
         "config_id": config_id,
     }
 
