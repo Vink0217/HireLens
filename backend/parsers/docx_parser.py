@@ -7,9 +7,11 @@ Layer 2: mammoth (fallback for complex formatting, embedded objects)
 
 import io
 import logging
+from zipfile import BadZipFile
 
 import mammoth
 from docx import Document
+from docx.opc.exceptions import PackageNotFoundError
 
 from parsers.text_cleaner import clean_text
 
@@ -44,6 +46,8 @@ def parse_docx(file_bytes: bytes) -> str:
                         paragraphs.append(cell.text)
 
         text = "\n".join(paragraphs).strip()
+    except (BadZipFile, PackageNotFoundError):
+        logger.warning("python-docx rejected invalid DOCX package")
     except Exception as e:
         logger.warning("python-docx failed: %s — falling back to mammoth", e)
 
@@ -52,8 +56,14 @@ def parse_docx(file_bytes: bytes) -> str:
         try:
             result = mammoth.extract_raw_text(io.BytesIO(file_bytes))
             text = result.value
+        except BadZipFile as e:
+            raise ValueError(
+                "Invalid or corrupted DOCX file. Please upload a valid .docx exported from Word or Google Docs."
+            ) from e
         except Exception as e:
-            raise ValueError(f"Could not parse DOCX: {e}") from e
+            raise ValueError(
+                "Could not parse DOCX. The file may be invalid, corrupted, or unsupported."
+            ) from e
 
     # ── Edge case: empty document ──────────────────────────────
     if len(text.strip()) < 50:
