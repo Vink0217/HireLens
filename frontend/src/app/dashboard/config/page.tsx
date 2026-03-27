@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import useSWR from "swr";
-import { fetcher, updateConfig, rescanConfig } from "@/lib/api";
+import { fetcher, updateConfig, rescanConfig, fetchRescanStatus, type RescanStatus } from "@/lib/api";
 import { Settings, Plus, Trash2, Save, RefreshCw, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 
 interface ConfigField {
@@ -39,6 +39,7 @@ export default function ExtractionConfigView() {
   const [isRescanning, setIsRescanning] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{text: string, type: 'success'|'error'} | null>(null);
   const [rescanMessage, setRescanMessage] = useState<{text: string, type: 'success'|'error'} | null>(null);
+  const [rescanStatus, setRescanStatus] = useState<RescanStatus | null>(null);
 
   // Load the default config into editor state when SWR finishes
   useEffect(() => {
@@ -93,7 +94,9 @@ export default function ExtractionConfigView() {
     setRescanMessage(null);
     try {
       await rescanConfig(activeConfigId);
-      setRescanMessage({ text: "Retroactive rescan started. Existing resumes are now being re-evaluated in the background.", type: 'success' });
+      setRescanMessage({ text: "Retroactive rescan started. Live progress will appear below.", type: 'success' });
+      const status = await fetchRescanStatus(activeConfigId);
+      setRescanStatus(status);
     } catch (error) {
       console.error(error);
       setRescanMessage({ text: "Could not start retroactive rescan. Please try again.", type: 'error' });
@@ -101,6 +104,41 @@ export default function ExtractionConfigView() {
       setIsRescanning(false);
     }
   };
+
+  useEffect(() => {
+    if (!activeConfigId) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const refreshStatus = async () => {
+      try {
+        const status = await fetchRescanStatus(activeConfigId);
+        if (!cancelled) {
+          setRescanStatus(status);
+        }
+
+        if (status.status === "completed") {
+          setRescanMessage({
+            text: `Rescan finished: ${status.success}/${status.total} resumes reprocessed successfully.${status.failed > 0 ? ` ${status.failed} failed.` : ""}`,
+            type: status.failed > 0 ? "error" : "success",
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(error);
+        }
+      }
+    };
+
+    refreshStatus();
+    timer = setInterval(refreshStatus, 2000);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [activeConfigId]);
 
   // Prevent UI flashing before SWR loads
   if (!configs) {
@@ -141,6 +179,28 @@ export default function ExtractionConfigView() {
         <div className={`flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-lg border animate-fade-in ${rescanMessage.type === 'success' ? 'text-brand-success border-brand-success/40 bg-brand-success/10' : 'text-brand-danger border-brand-danger/40 bg-brand-danger/10'}`}>
           {rescanMessage.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
           {rescanMessage.text}
+        </div>
+      )}
+
+      {rescanStatus && rescanStatus.status !== "idle" && (
+        <div className="px-4 py-3 rounded-lg border border-brand-border/60 bg-brand-surface/40 text-sm text-brand-text">
+          <div className="flex items-center justify-between gap-4">
+            <p className="font-semibold">
+              Rescan status: {rescanStatus.status === "running" ? "Running" : rescanStatus.status === "queued" ? "Queued" : rescanStatus.status === "completed" ? "Completed" : "Failed"}
+            </p>
+            <p className="text-xs text-brand-text-muted">
+              {rescanStatus.processed}/{rescanStatus.total} processed
+            </p>
+          </div>
+          <div className="mt-2 h-2 w-full rounded-full bg-brand-bg overflow-hidden">
+            <div
+              className="h-full bg-brand-accent transition-all duration-500"
+              style={{ width: `${rescanStatus.total > 0 ? Math.min(100, (rescanStatus.processed / rescanStatus.total) * 100) : 0}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-brand-text-muted">
+            Success: {rescanStatus.success} | Failed: {rescanStatus.failed}
+          </p>
         </div>
       )}
 

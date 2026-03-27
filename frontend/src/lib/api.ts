@@ -80,6 +80,23 @@ export const rescanConfig = async (configId: string) => {
   return data;
 };
 
+export interface RescanStatus {
+  config_id: string;
+  status: "idle" | "queued" | "running" | "completed" | "failed";
+  message: string;
+  total: number;
+  processed: number;
+  success: number;
+  failed: number;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export const fetchRescanStatus = async (configId: string) => {
+  const { data } = await api.get<RescanStatus>(`/configs/${configId}/rescan-status`);
+  return data;
+};
+
 export const deleteResume = async (resumeId: string) => {
   const { data } = await api.delete(`/resumes/${resumeId}`);
   return data;

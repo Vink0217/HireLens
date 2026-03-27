@@ -1,5 +1,7 @@
 """Extraction config CRUD endpoints."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
@@ -12,6 +14,15 @@ from db.configs import (
 )
 
 router = APIRouter(prefix="/configs", tags=["configs"])
+
+
+# In-memory tracking for rescan progress per config.
+# Note: status resets on backend restart.
+_rescan_status: dict[str, dict] = {}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 # ── Request / Response Models ──────────────────────────────
@@ -86,12 +97,48 @@ async def rescan_resumes(config_id: str, background_tasks: BackgroundTasks):
 
     from services.tasks.reparse import batch_reparse
 
-    background_tasks.add_task(batch_reparse, pool, config_id)
+    _rescan_status[config_id] = {
+        "config_id": config_id,
+        "status": "queued",
+        "message": "Re-extraction queued",
+        "total": 0,
+        "processed": 0,
+        "success": 0,
+        "failed": 0,
+        "started_at": _utc_now_iso(),
+        "completed_at": None,
+    }
+
+    def _update_progress(update: dict) -> None:
+        current = _rescan_status.get(config_id, {"config_id": config_id})
+        current.update(update)
+        _rescan_status[config_id] = current
+
+    background_tasks.add_task(batch_reparse, pool, config_id, _update_progress)
 
     return {
         "message": "Re-extraction started in background",
         "config_id": config_id,
     }
+
+
+@router.get("/{config_id}/rescan-status")
+async def get_rescan_status(config_id: str):
+    """Return latest known reparse status for a config."""
+    status = _rescan_status.get(config_id)
+    if not status:
+        return {
+            "config_id": config_id,
+            "status": "idle",
+            "message": "No rescan has been triggered yet",
+            "total": 0,
+            "processed": 0,
+            "success": 0,
+            "failed": 0,
+            "started_at": None,
+            "completed_at": None,
+        }
+    return status
 
 
 # ── Helpers ────────────────────────────────────────────────
