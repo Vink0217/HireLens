@@ -38,6 +38,7 @@ export default function ExtractionConfigView() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRescanning, setIsRescanning] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{text: string, type: 'success'|'error'} | null>(null);
+  const [rescanMessage, setRescanMessage] = useState<{text: string, type: 'success'|'error'} | null>(null);
 
   // Load the default config into editor state when SWR finishes
   useEffect(() => {
@@ -87,14 +88,15 @@ export default function ExtractionConfigView() {
   };
 
   const handleRescan = async () => {
-    if (!activeConfigId || !confirm("This will trigger a background re-evaluation of ALL resumes using Gemini. Are you sure?")) return;
+    if (!activeConfigId) return;
     setIsRescanning(true);
+    setRescanMessage(null);
     try {
       await rescanConfig(activeConfigId);
-      alert("Background rescan initiated! Check the console or logs.");
+      setRescanMessage({ text: "Retroactive rescan started. Existing resumes are now being re-evaluated in the background.", type: 'success' });
     } catch (error) {
       console.error(error);
-      alert("Triggering rescan failed.");
+      setRescanMessage({ text: "Could not start retroactive rescan. Please try again.", type: 'error' });
     } finally {
       setIsRescanning(false);
     }
@@ -130,6 +132,17 @@ export default function ExtractionConfigView() {
           {isRescanning ? "Initiating..." : "Retroactive Rescan"}
         </button>
       </header>
+
+      <p className="text-xs text-brand-text-muted -mt-5">
+        Retroactive rescan reprocesses all existing resumes with the current extraction schema.
+      </p>
+
+      {rescanMessage && (
+        <div className={`flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-lg border animate-fade-in ${rescanMessage.type === 'success' ? 'text-brand-success border-brand-success/40 bg-brand-success/10' : 'text-brand-danger border-brand-danger/40 bg-brand-danger/10'}`}>
+          {rescanMessage.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          {rescanMessage.text}
+        </div>
+      )}
 
       <div className="bg-brand-bg-raised border border-brand-border/50 rounded-xl overflow-hidden shadow-lg">
         <div className="px-8 py-6 border-b border-brand-border/30 bg-brand-surface/30">
