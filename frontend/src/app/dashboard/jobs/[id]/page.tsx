@@ -76,6 +76,7 @@ export default function JobDetailView() {
   const [ragEvidence, setRagEvidence] = useState<RagEvidenceChunk[]>([]);
   const [isLoadingRagEvidence, setIsLoadingRagEvidence] = useState(false);
   const [ragError, setRagError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
   const { data: candidatesData, error: candidatesError, mutate } = useSWR(`/resumes?job_id=${jobId}`, fetcher);
   const { data: jobData } = useSWR(`/jobs/${jobId}`, fetcher);
@@ -103,16 +104,27 @@ export default function JobDetailView() {
   const handleFileUpload = async (file: File) => {
     try {
       setIsUploading(true);
+      setUploadNotice(null);
       await uploadResume(jobId, file);
       mutate();
+      setUploadNotice({ type: "success", message: "Resume uploaded and processed successfully." });
     } catch (error: any) {
       if (error.response?.status === 409) {
-        alert("Duplicate Detcted: This exact resume has already been uploaded and scored for this role!");
+        setUploadNotice({
+          type: "warning",
+          message: "Duplicate detected: this exact resume is already screened for this role.",
+        });
       } else if (error.response?.status === 503) {
-        alert(error.response?.data?.detail || "AI provider is temporarily busy. Please retry in a few seconds.");
+        setUploadNotice({
+          type: "warning",
+          message: error.response?.data?.detail || "AI provider is temporarily busy. Please retry in a few seconds.",
+        });
       } else {
         console.error("Upload failed", error);
-        alert(error.response?.data?.detail || "Failed to upload and process resume. Check backend logs.");
+        setUploadNotice({
+          type: "error",
+          message: error.response?.data?.detail || "Failed to upload and process resume. Please try again.",
+        });
       }
     } finally {
       setIsUploading(false);
@@ -367,6 +379,20 @@ export default function JobDetailView() {
               Browse Files
             </button>
           </div>
+
+          {uploadNotice && (
+            <div
+              className={`rounded-lg border px-4 py-3 text-xs leading-relaxed ${
+                uploadNotice.type === "success"
+                  ? "border-brand-success/40 bg-brand-success/10 text-brand-success"
+                  : uploadNotice.type === "warning"
+                    ? "border-brand-accent/40 bg-brand-accent/10 text-brand-accent"
+                    : "border-brand-danger/40 bg-brand-danger/10 text-brand-danger"
+              }`}
+            >
+              {uploadNotice.message}
+            </div>
+          )}
 
           <div className="bg-brand-surface/30 border border-brand-border/50 rounded-xl p-5 border-l-2 border-l-brand-success">
             <h4 className="text-xs font-bold uppercase tracking-wider text-brand-text-muted mb-3">Resume Overview</h4>
