@@ -30,28 +30,28 @@ The backend is a FastAPI service that runs an explicit upload pipeline: validate
 
 ## Dataflow Diagram
 ```mermaid
-flowchart LR
-    U[Recruiter uploads resume] --> A[Frontend Dashboard\nNext.js + SWR]
+flowchart TD
+    U[Recruiter uploads resume] --> A[Frontend Dashboard<br/>Next.js + SWR]
     A --> B[POST /api/resumes/upload]
 
     subgraph ING[Ingestion and Validation]
         B --> C[Validate size and extension]
         C --> D{File type}
-        D -->|PDF| E[PDF parser\npdfplumber -> PyMuPDF fallback]
-        D -->|DOCX| F[DOCX parser\npython-docx -> Mammoth fallback]
+        D -->|PDF| E[PDF parser<br/>pdfplumber → PyMuPDF fallback]
+        D -->|DOCX| F[DOCX parser<br/>python-docx → Mammoth fallback]
         E --> G[Cleaned raw text]
         F --> G
-        G --> H[Dedup hash\nidentifier + job_id]
+        G --> H[Dedup hash<br/>identifier + job_id]
     end
 
     H --> I{Duplicate for role?}
-    I -->|Yes| J[409 Conflict\nReturn existing match]
-    I -->|No| K[Store file URL\nCloudinary or local]
+    I -->|Yes| J[409 Conflict<br/>Return existing match]
+    I -->|No| K[Store file URL<br/>Cloudinary or local]
 
     subgraph AIP[AI Pipeline]
         K --> L[Load active extraction config]
-        L --> M[Gemini extractor\nSchema-driven JSON]
-        M --> N[Gemini scorer\nscore + summary + evidence]
+        L --> M[Gemini extractor<br/>Schema-driven JSON]
+        M --> N[Gemini scorer<br/>score + summary + evidence]
     end
 
     N --> O[(PostgreSQL)]
@@ -60,12 +60,12 @@ flowchart LR
     P --> R[Dashboard views]
     Q --> R
 
-    S[Config updated\n/dashboard/config] --> T[POST /api/configs/config_id/rescan]
-    T --> V[Background task\nbatch_reparse]
+    S[Config updated<br/>/dashboard/config] --> T[POST /api/configs/config_id/rescan]
+    T --> V[Background task<br/>batch_reparse]
     V --> W[Re-extract each resume]
     W --> X[Re-score linked screenings]
     X --> O
-    O --> Y[GET /api/configs/config_id/rescan-status\nprogress and outcome]
+    O --> Y[GET /api/configs/config_id/rescan-status<br/>progress and outcome]
     Y --> R
 
     classDef frontend fill:#eef2ff,stroke:#4f46e5,color:#111827,stroke-width:1px;
